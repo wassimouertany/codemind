@@ -1,0 +1,90 @@
+[project]
+name = "codemind"
+version = "0.1.0"
+description = "Autonomous software-engineering agent over a real repository"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    # api
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "sse-starlette>=2.1",
+    # ingestion
+    "gitpython>=3.1",
+    "tree-sitter>=0.23",
+    "tree-sitter-language-pack>=0.4",
+    "networkx>=3.4",
+    "pathspec>=0.12",
+    # retrieval
+    "qdrant-client>=1.12",
+    "fastembed>=0.4",
+    "sentence-transformers>=3.3",
+    "onnxruntime>=1.20",
+    # agents
+    "langgraph>=0.2.50",
+    "langgraph-checkpoint-sqlite>=2.0",
+    "langchain-core>=0.3",
+    "jinja2>=3.1",
+    # llm
+    "httpx>=0.27",
+    "openai>=1.57",
+    # storage
+    "sqlalchemy>=2.0",
+    "aiosqlite>=0.20",
+    # observability
+    "langfuse>=2.53",
+    "structlog>=24.4",
+    "tenacity>=9.0",
+]
+
+[project.optional-dependencies]
+eval = ["ragas>=0.2", "datasets>=3.1", "pandas>=2.2", "scikit-learn>=1.5"]
+dev = [
+    "pytest>=8.3", "pytest-asyncio>=0.24", "pytest-cov>=6.0",
+    "ruff>=0.8", "mypy>=1.13", "import-linter>=2.1", "httpx>=0.27",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/codemind"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+# blob.py is intentionally non-UTF-8; ruff must not try to parse fixtures
+exclude = ["tests/fixtures"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "BLE", "C4", "SIM", "TID", "RUF", "ASYNC"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src/codemind"]
+plugins = ["pydantic.mypy"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+
+[tool.importlinter]
+root_packages = ["codemind"]
+
+[[tool.importlinter.contracts]]
+name = "judge is evaluation-only"
+type = "forbidden"
+source_modules = ["codemind.agents", "codemind.api", "codemind.retrieval"]
+forbidden_modules = ["codemind.llm.judge"]
+
+[[tool.importlinter.contracts]]
+name = "layered architecture"
+type = "layers"
+layers = ["codemind.api", "codemind.agents", "codemind.retrieval", "codemind.ingestion", "codemind.core"]
