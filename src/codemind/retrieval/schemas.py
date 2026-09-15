@@ -36,7 +36,11 @@ class RetrievalSource(StrEnum):
     DENSE = "dense"
     SPARSE = "sparse"
     HYBRID = "hybrid"
-    """Both prefetch branches returned it — the strongest signal fusion has."""
+    """Returned by RRF fusion over the dense and sparse prefetch branches.
+
+    Qdrant reports only the fused score, so this does not say which branch (or
+    both) found the chunk. Branch attribution needs separate per-branch runs.
+    """
     EXPANDED = "expanded"
     """Pulled in by `expansion` as a caller, callee or parent class, not by search."""
 

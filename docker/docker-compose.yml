@@ -2,7 +2,7 @@ name: codemind
 
 services:
   qdrant:
-    image: qdrant/qdrant:latest
+    image: qdrant/qdrant:v1.19.1
     container_name: codemind-qdrant
     restart: unless-stopped
     ports:

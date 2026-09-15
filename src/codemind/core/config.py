@@ -57,6 +57,13 @@ class Settings(BaseSettings):
     # retrieval
     prefetch_dense: int = Field(20, ge=1, le=200)
     prefetch_sparse: int = Field(20, ge=1, le=200)
+    fusion_method: Literal["rrf", "dbsf"] = "rrf"
+    """How the dense and sparse prefetches are combined server-side.
+
+    `rrf` fuses ranks only; `dbsf` normalises each branch's scores (mean +/- 3
+    sigma) and sums them, so a branch's confidence margin survives fusion. On
+    the fixture, "find by customer id" ranks findByCustomerId 2nd under RRF
+    (sparse is 8.8 vs 3.4 sure, but rank discards that) and 1st under DBSF."""
     rerank_top_k: int = Field(5, ge=1, le=50)
 
     # observability

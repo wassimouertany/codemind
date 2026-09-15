@@ -87,10 +87,16 @@ class CodeChunk:
         no-op, while an edited function produces a new ID and supersedes the old.
         """
         digest = hashlib.blake2b(
-            f"{self.relative_path}:{self.symbol_name}:{self.start_line}:{self.body}".encode(),
+            f"{self.relative_path}:{self.symbol_name}:{self.body}".encode(),
             digest_size=16,
         )
         return digest.hexdigest()
+
+    @property
+    def point_uuid(self) -> str:
+        """`chunk_id` as a UUID string — Qdrant accepts only ints or UUIDs."""
+        h = self.chunk_id
+        return f"{h[:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:32]}"
 
     @property
     def embedding_text(self) -> str:
