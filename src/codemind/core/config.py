@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     qdrant_collection: str = "codemind_chunks"
     qdrant_quantization: bool = True
     qdrant_on_disk: bool = True
+    qdrant_timeout: float = Field(60.0, gt=0)
+    qdrant_upsert_batch: int = Field(128, ge=1, le=2048)
+    """Points per upsert call. 128 keeps a request well under the 32 MB body cap
+    while still amortising round-trips over a ~50k-chunk ingest."""
 
     # storage
     database_url: str = "sqlite+aiosqlite:///./data/codemind.db"
@@ -35,6 +39,10 @@ class Settings(BaseSettings):
     embedding_model: str = "jinaai/jina-embeddings-v2-base-code"
     embedding_dim: int = 768
     embedding_device: Literal["cpu", "cuda"] = "cpu"
+    embedding_batch_size: int = Field(32, ge=1, le=512)
+    """Small on purpose. The GPU holds the LLM during serving, and on CPU a
+    larger batch buys little while raising peak RSS against a 16 GB budget."""
+    sparse_model: str = "Qdrant/bm25"
     reranker_model: str = "BAAI/bge-reranker-base"
     reranker_device: Literal["cpu", "cuda"] = "cpu"
 

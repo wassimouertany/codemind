@@ -74,6 +74,9 @@ ignore_missing_imports = true
 asyncio_mode = "auto"
 testpaths = ["tests"]
 addopts = "-q --strict-markers"
+markers = [
+    "slow: loads a real model or hits a real service; deselect with -m 'not slow'",
+]
 
 [tool.importlinter]
 root_packages = ["codemind"]
