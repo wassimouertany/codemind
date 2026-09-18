@@ -15,10 +15,10 @@ Memory, because 16 GB is the whole budget:
 
 * `on_disk=True` keeps original float32 vectors in mmapped storage, not RSS.
 * int8 scalar quantization keeps a 4x-smaller copy resident (`always_ram=True`)
-  and rescores against the on-disk originals. For 100k chunks that is ~75 MB
-  resident instead of ~300 MB.
+and rescores against the on-disk originals. For 100k chunks that is ~75 MB
+resident instead of ~300 MB.
 * `on_disk_payload=True` — payloads carry full chunk bodies, which are the
-  largest thing here and are only needed for points that actually come back.
+largest thing here and are only needed for points that actually come back.
 
 **`Modifier.IDF` is not optional.** fastembed's `Qdrant/bm25` emits the
 term-frequency half of BM25 only; the inverse-document-frequency half depends
@@ -284,6 +284,39 @@ class QdrantStore:
     async def count(self) -> int:
         result = await self._client.count(self._collection, exact=True)
         return result.count
+
+    async def fetch_by_symbols(
+        self, symbols: Sequence[tuple[str, str]], *, limit: int = 100
+    ) -> list[CodeChunk]:
+        """Fetch chunks by (file_path, symbol_name) pairs, in one round trip.
+
+        Expansion needs this because the symbol graph stores qualified names
+        (`path::Class.method`), not chunk IDs — a chunk ID hashes the body,
+        which the graph never holds. The `file_path` payload index carries the
+        filter; `symbol_name` is unindexed, so Qdrant checks it after that
+        narrowing.
+
+        Returns fewer chunks than pairs when a symbol was never indexed (a
+        merged accessor blob, or a file that changed since the graph was built).
+        """
+        if not symbols:
+            return []
+        conditions: list[models.Condition] = [
+            models.Filter(
+                must=[
+                    models.FieldCondition(key="file_path", match=models.MatchValue(value=path)),
+                    models.FieldCondition(key="symbol_name", match=models.MatchValue(value=name)),
+                ]
+            )
+            for path, name in symbols
+        ]
+        points, _ = await self._client.scroll(
+            self._collection,
+            scroll_filter=models.Filter(should=conditions),
+            limit=limit,
+            with_payload=True,
+        )
+        return [chunk_from_payload(point.payload) for point in points]
 
     async def get_chunk(self, chunk_id: str) -> CodeChunk | None:
         """Fetch one chunk by its content-addressed ID."""

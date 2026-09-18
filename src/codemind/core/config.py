@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     while still amortising round-trips over a ~50k-chunk ingest."""
 
     # storage
+    repos_dir: Path = Path("./.repos")
+    """Where repositories are cloned. Keep it on the Linux filesystem: ingestion
+    from /mnt/c crawls under WSL2."""
+    graph_dir: Path = Path("./data/graphs")
+    """Symbol graphs live beside the collection they describe, one JSON per
+    collection, so a rebuilt collection never loads a stale graph."""
     database_url: str = "sqlite+aiosqlite:///./data/codemind.db"
     checkpoint_db: Path = Path("./data/checkpoints.db")
 
@@ -45,6 +51,12 @@ class Settings(BaseSettings):
     sparse_model: str = "Qdrant/bm25"
     reranker_model: str = "BAAI/bge-reranker-base"
     reranker_device: Literal["cpu", "cuda"] = "cpu"
+    reranker_batch_size: int = Field(16, ge=1, le=256)
+    """Cross-encoder pairs per forward pass. Smaller than the embedder's batch:
+    pairs are query+chunk, so each row is roughly twice as long."""
+    reranker_max_length: int = Field(512, ge=128, le=2048)
+    """Tokens per pair. bge-reranker-base is trained at 512; longer inputs cost
+    quadratic attention for text the model never learned to use."""
 
     # llm
     llm_provider: Literal["ollama", "vllm"] = "ollama"
@@ -64,6 +76,11 @@ class Settings(BaseSettings):
     sigma) and sums them, so a branch's confidence margin survives fusion. On
     the fixture, "find by customer id" ranks findByCustomerId 2nd under RRF
     (sparse is 8.8 vs 3.4 sure, but rank discards that) and 1st under DBSF."""
+    expansion_depth: int = Field(1, ge=0, le=3)
+    """Call-graph hops pulled in around each reranked hit. 0 disables expansion.
+    Past 2 the neighbourhood grows faster than the context window."""
+    expansion_max_extra: int = Field(10, ge=0, le=100)
+    """Hard cap on appended neighbours, so one hub symbol cannot flood context."""
     rerank_top_k: int = Field(5, ge=1, le=50)
 
     # observability

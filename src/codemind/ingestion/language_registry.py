@@ -37,6 +37,14 @@ class LanguageSpec:
     import_nodes: frozenset[str]
     """Node types the symbol graph reads to build dependency edges."""
 
+    call_nodes: frozenset[str]
+    """Node types representing a call site (the symbol graph's CALLS edges)."""
+
+    field_nodes: frozenset[str] = frozenset()
+    """Declarations that bind a variable name to a type, used to resolve the
+    receiver of a call. Java fields give `orderRepository -> OrderRepository`;
+    Python has no equivalent without annotations, so this is empty there."""
+
     name_field: str = "name"
     """Field name holding the identifier on chunk/container nodes."""
 
@@ -49,6 +57,7 @@ _SPECS: Final[tuple[LanguageSpec, ...]] = (
         chunk_nodes=frozenset({"function_definition", "decorated_definition"}),
         container_nodes=frozenset({"class_definition"}),
         import_nodes=frozenset({"import_statement", "import_from_statement"}),
+        call_nodes=frozenset({"call"}),
     ),
     LanguageSpec(
         language=Language.JAVA,
@@ -59,6 +68,10 @@ _SPECS: Final[tuple[LanguageSpec, ...]] = (
             {"class_declaration", "interface_declaration", "enum_declaration", "record_declaration"}
         ),
         import_nodes=frozenset({"import_declaration"}),
+        call_nodes=frozenset({"method_invocation", "object_creation_expression"}),
+        field_nodes=frozenset(
+            {"field_declaration", "formal_parameter", "local_variable_declaration"}
+        ),
     ),
     LanguageSpec(
         language=Language.TYPESCRIPT,
@@ -76,6 +89,7 @@ _SPECS: Final[tuple[LanguageSpec, ...]] = (
             {"class_declaration", "interface_declaration", "type_alias_declaration"}
         ),
         import_nodes=frozenset({"import_statement"}),
+        call_nodes=frozenset({"call_expression", "new_expression"}),
     ),
     LanguageSpec(
         language=Language.JAVASCRIPT,
@@ -84,6 +98,7 @@ _SPECS: Final[tuple[LanguageSpec, ...]] = (
         chunk_nodes=frozenset({"function_declaration", "method_definition", "arrow_function"}),
         container_nodes=frozenset({"class_declaration"}),
         import_nodes=frozenset({"import_statement"}),
+        call_nodes=frozenset({"call_expression", "new_expression"}),
     ),
 )
 
