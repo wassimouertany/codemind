@@ -31,7 +31,15 @@ pytestmark = pytest.mark.filterwarnings("ignore:Payload indexes have no effect:U
 
 
 def expansion_settings(**overrides: object) -> Settings:
-    return Settings(qdrant_collection="test_expansion", **overrides)  # type: ignore[arg-type]
+    """Settings for exercising expansion.
+
+    `expansion_depth` is pinned to 1 rather than inherited: the shipped default
+    is 0 (off, on Gate 1 evidence), and these tests exist to measure the stage,
+    not the default. Overrides still win, so the depth-0 test can ask for it.
+    """
+    values: dict[str, object] = {"qdrant_collection": "test_expansion", "expansion_depth": 1}
+    values.update(overrides)
+    return Settings(**values)  # type: ignore[arg-type]
 
 
 @pytest.fixture(scope="module")
@@ -218,3 +226,20 @@ async def test_works_on_a_graph_restored_from_disk(
         [hit(chunks, "placeOrder")]
     )
     assert "processPayment" in names(results)
+
+
+async def test_ablation_forces_a_hop_even_when_expansion_ships_disabled(
+    store: QdrantStore, ingredients: tuple[list[CodeChunk], SymbolGraph]
+) -> None:
+    """EXPANSION_DEPTH=0 is the shipped default; the ablation must still measure.
+
+    Mirrors `Harness.retrieve`: without the max(1, depth) override the expansion
+    row silently equals hybrid_rerank and the table stops measuring the stage.
+    """
+    chunks, graph = ingredients
+    shipped = expansion_settings(expansion_depth=0)
+    forced = shipped.model_copy(update={"expansion_depth": max(1, shipped.expansion_depth)})
+
+    hits = [hit(chunks, "placeOrder")]
+    assert await GraphExpander(store, graph, shipped).expand(hits) == list(hits)
+    assert len(await GraphExpander(store, graph, forced).expand(hits)) > 1

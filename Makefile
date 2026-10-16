@@ -19,7 +19,9 @@ dev: up ## run the api with reload
 	uv run uvicorn codemind.main:app --reload --port 8000
 
 ingest: ## make ingest REPO=https://github.com/owner/name
-	EMBEDDING_DEVICE=cuda uv run python scripts/ingest_repo.py --repo $(REPO)
+	# onnxruntime 1.30 needs CUDA 13 runtime libs that are not installed;
+	# fastembed silently falls back to CPU, so do not pretend otherwise.
+	uv run python scripts/ingest_repo.py --repo $(REPO)
 
 test: ## run tests
 	uv run pytest
@@ -34,8 +36,11 @@ fmt: ## autoformat
 	uv run ruff check --fix src tests
 	uv run ruff format src tests
 
-eval-retrieval: ## Recall@k / MRR / nDCG + ablation table
-	uv run python evaluation/retrieval_eval.py --ablation
+validate-goldset: ## check every gold path is indexed before measuring
+	uv run python -m evaluation.validate_goldset
+
+eval-retrieval: validate-goldset ## Recall@k / MRR / nDCG + ablation table
+	uv run python -m evaluation.retrieval_eval --ablation
 
 eval-ragas: ## faithfulness / context precision / context recall
 	uv run python evaluation/ragas_eval.py
@@ -43,7 +48,7 @@ eval-ragas: ## faithfulness / context precision / context recall
 bench-model: ## base vs QLoRA on identical contexts
 	uv run python evaluation/model_benchmark.py
 
-.PHONY: help install up down dev ingest test lint fmt eval-retrieval eval-ragas bench-model
+.PHONY: help install up down dev ingest test lint fmt validate-goldset eval-retrieval eval-ragas bench-model
 
 status: ## show project progress and what to build next
 	@uv run python scripts/status.py

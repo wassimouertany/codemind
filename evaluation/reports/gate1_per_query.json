@@ -1,0 +1,89 @@
+[
+  {
+    "configuration": "dense_only",
+    "query_id": "bug-01",
+    "category": "bug",
+    "question": "Why would submitting the owner form with a blank last name fail validation?",
+    "gold_files": [
+      "src/main/java/org/springframework/samples/petclinic/owner/Owner.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/OwnerController.java"
+    ],
+    "retrieved_files": [
+      "src/main/java/org/springframework/samples/petclinic/owner/OwnerController.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/PetController.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/PetValidator.java"
+    ],
+    "retrieved_chunks": [
+      "src/main/java/org/springframework/samples/petclinic/owner/OwnerController.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/OwnerController.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/OwnerController.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/PetController.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/OwnerController.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/PetController.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/PetController.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/PetController.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/OwnerController.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/PetValidator.java"
+    ],
+    "recall_at_10": 0.5
+  },
+  {
+    "configuration": "dense_only",
+    "query_id": "bug-02",
+    "category": "bug",
+    "question": "Why does searching for an owner that does not exist return a binding error in search form?",
+    "gold_files": [
+      "src/main/java/org/springframework/samples/petclinic/owner/OwnerController.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/OwnerRepository.java"
+    ],
+    "retrieved_files": [
+      "src/main/java/org/springframework/samples/petclinic/owner/OwnerController.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/OwnerRepository.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/PetController.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/Owner.java"
+    ],
+    "retrieved_chunks": [
+      "src/main/java/org/springframework/samples/petclinic/owner/OwnerController.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/OwnerController.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/OwnerController.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/OwnerRepository.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/PetController.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/OwnerController.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/OwnerController.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/OwnerRepository.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/OwnerController.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/Owner.java"
+    ],
+    "recall_at_10": 1.0
+  },
+  {
+    "configuration": "dense_only",
+    "query_id": "bug-03",
+    "category": "bug",
+    "question": "Why would adding a visit to a pet fail during form validation when description is blank?",
+    "gold_files": [
+      "src/main/java/org/springframework/samples/petclinic/owner/VisitController.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/Visit.java"
+    ],
+    "retrieved_files": [
+      "src/main/java/org/springframework/samples/petclinic/owner/VisitController.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/Owner.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/PetController.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/Pet.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/PetValidator.java"
+    ],
+    "retrieved_chunks": [
+      "src/main/java/org/springframework/samples/petclinic/owner/VisitController.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/VisitController.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/Owner.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/PetController.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/PetController.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/Pet.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/Owner.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/PetValidator.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/Pet.java",
+      "src/main/java/org/springframework/samples/petclinic/owner/VisitController.java"
+    ],
+    "recall_at_10": 0.5
+  }
+]

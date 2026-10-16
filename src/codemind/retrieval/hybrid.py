@@ -86,6 +86,68 @@ class HybridRetriever:
         """Candidates returned after fusion: every prefetch slot, deduplicated server-side."""
         return self._prefetch_dense + self._prefetch_sparse
 
+    async def search_branch(
+        self,
+        query: str,
+        *,
+        branch: str,
+        limit: int | None = None,
+        query_filter: models.Filter | None = None,
+    ) -> RetrievalResult:
+        """Query one branch alone, with no fusion. Built for the ablation.
+
+        `dense_only` and `sparse_only` are rows in the Gate 1 table, and they
+        have to be measured at the same depth as the fused rows or the
+        comparison says nothing. The default `limit` is therefore `fused_limit`,
+        not a branch prefetch size.
+
+        Lives here rather than in the evaluation script so every Qdrant query in
+        the system goes through one module.
+        """
+        if not query.strip():
+            raise RetrievalError("cannot retrieve for an empty query")
+        if branch not in (DENSE_VECTOR, SPARSE_VECTOR):
+            raise RetrievalError(f"unknown branch {branch!r}")
+
+        vector: list[float] | models.SparseVector = (
+            await self._embedder.embed_query(query)
+            if branch == DENSE_VECTOR
+            else await self._sparse.encode_query(query)
+        )
+        source = RetrievalSource.DENSE if branch == DENSE_VECTOR else RetrievalSource.SPARSE
+
+        try:
+            response = await self._store.client.query_points(
+                collection_name=self._store.collection_name,
+                query=vector,
+                using=branch,
+                limit=limit if limit is not None else self.fused_limit,
+                query_filter=query_filter,
+                with_payload=True,
+            )
+        except (UnexpectedResponse, ResponseHandlingException) as exc:
+            raise RetrievalError(
+                f"{branch} query against {self._store.collection_name!r} failed: {exc}"
+            ) from exc
+
+        chunks = [
+            ScoredChunk(
+                chunk=chunk_from_payload(point.payload),
+                score=point.score,
+                source=source,
+                dense_score=point.score if branch == DENSE_VECTOR else None,
+                sparse_score=point.score if branch == SPARSE_VECTOR else None,
+                rank=rank,
+            )
+            for rank, point in enumerate(response.points, start=1)
+        ]
+        return RetrievalResult(
+            query=query,
+            chunks=chunks,
+            dense_candidates=len(chunks) if branch == DENSE_VECTOR else 0,
+            sparse_candidates=len(chunks) if branch == SPARSE_VECTOR else 0,
+        )
+
     async def search(
         self,
         query: str,

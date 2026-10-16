@@ -70,6 +70,7 @@ class Embedder:
         )
         self._model = TextEmbedding(self._model_name, cuda=self._device == "cuda")
         self._verify_dimension()
+        self._verify_device()
 
     def _verify_dimension(self) -> None:
         """One forward pass to prove the model matches the configured dimension.
@@ -89,6 +90,43 @@ class Embedder:
                 f"EMBEDDING_DIM is {self._expected_dim}; fix the setting or the model, "
                 "and recreate the Qdrant collection"
             )
+
+    def _verify_device(self) -> None:
+        """Warn when CUDA was asked for but ONNX Runtime fell back to CPU.
+
+        `cuda=True` is a request, not a guarantee: without `onnxruntime-gpu`, a
+        visible device or a matching CUDA runtime, fastembed silently builds a
+        CPU session. The failure mode is a `make ingest` that takes forty
+        minutes instead of four with nothing in the logs to explain it, so this
+        names the mismatch. It does not raise — CPU is a correct fallback, and
+        an ingest that is slow still finishes.
+        """
+        if self._device != "cuda":
+            return
+        providers = self._providers()
+        if providers and not any("CUDA" in provider for provider in providers):
+            logger.warning(
+                "EMBEDDING_DEVICE=cuda but ONNX Runtime reports only %s — "
+                "running on CPU. Install onnxruntime-gpu and check that a device "
+                "is visible, or set EMBEDDING_DEVICE=cpu to silence this.",
+                ", ".join(providers),
+            )
+
+    def _providers(self) -> list[str]:
+        """Execution providers of the live ONNX session, or empty if unreachable.
+
+        Reaches through fastembed's internals (`TextEmbedding.model.model` is the
+        `InferenceSession`), so it is written defensively: a layout change in
+        fastembed must not break construction over a diagnostic.
+        """
+        session = getattr(getattr(self._model, "model", None), "model", None)
+        getter = getattr(session, "get_providers", None)
+        if getter is None:
+            return []
+        try:
+            return [str(provider) for provider in getter()]
+        except (AttributeError, RuntimeError):  # pragma: no cover - defensive
+            return []
 
     @property
     def model_name(self) -> str:

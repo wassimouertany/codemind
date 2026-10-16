@@ -4,6 +4,7 @@
     uv run python scripts/ingest_repo.py --repo ./local/checkout --collection scratch
     uv run python scripts/ingest_repo.py --repo ./repo --no-resume      # skip per-file deletes
     uv run python scripts/ingest_repo.py --repo ./repo --recreate       # drop the collection first
+    uv run python scripts/ingest_repo.py --repo ./repo --include-tests   # also index tests
 
 `make ingest REPO=...` runs this with `EMBEDDING_DEVICE=cuda`, which is safe
 only because the LLM is not loaded during ingestion. Everything else comes from
@@ -25,7 +26,7 @@ import time
 
 from qdrant_client.http.exceptions import ResponseHandlingException, UnexpectedResponse
 
-from codemind.core.config import Settings, get_settings
+from codemind.core.config import get_settings
 from codemind.core.exceptions import CodeMindError
 from codemind.ingestion.pipeline import IngestionPipeline, IngestionReport
 from codemind.retrieval.embedder import Embedder
@@ -59,9 +60,12 @@ class ProgressBar:
 
 
 async def run(args: argparse.Namespace) -> int:
-    settings = get_settings()
+    overrides: dict[str, object] = {}
     if args.collection:
-        settings = Settings(qdrant_collection=args.collection)
+        overrides["qdrant_collection"] = args.collection
+    if args.include_tests:
+        overrides["index_tests"] = True
+    settings = get_settings().model_copy(update=overrides) if overrides else get_settings()
 
     store = QdrantStore(settings)
     pipeline = IngestionPipeline(store, Embedder(settings), SparseEncoder(settings), settings)
@@ -126,6 +130,11 @@ def main() -> None:
     )
     parser.add_argument(
         "--recreate", action="store_true", help="drop the collection first (destroys all points)"
+    )
+    parser.add_argument(
+        "--include-tests",
+        action="store_true",
+        help="also index test sources (default: excluded, see INDEX_TESTS)",
     )
     parser.add_argument("--json", action="store_true", help="print the report as JSON")
     args = parser.parse_args()

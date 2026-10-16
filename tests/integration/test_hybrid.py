@@ -263,3 +263,45 @@ async def test_missing_collection_raises_retrieval_error() -> None:
             await make_retriever(store, settings).search("placeOrder")
     finally:
         await store.close()
+
+
+# --------------------------------------------------------------------------- #
+# single-branch search (the ablation's dense_only / sparse_only rows)
+# --------------------------------------------------------------------------- #
+
+
+async def test_sparse_branch_alone_ranks_an_exact_name_first(
+    retriever: HybridRetriever,
+) -> None:
+    result = await retriever.search_branch("findByCustomerId", branch="sparse")
+    assert result.chunks[0].chunk.symbol_name == "findByCustomerId"
+    assert result.chunks[0].source is RetrievalSource.SPARSE
+    assert result.chunks[0].sparse_score is not None
+    assert result.chunks[0].dense_score is None
+
+
+async def test_dense_branch_alone_returns_scored_chunks(retriever: HybridRetriever) -> None:
+    result = await retriever.search_branch("where are orders saved", branch="dense")
+    assert result.chunks
+    assert all(c.source is RetrievalSource.DENSE for c in result.chunks)
+    assert all(c.dense_score is not None for c in result.chunks)
+    assert result.dense_candidates == len(result.chunks)
+
+
+async def test_branch_depth_matches_the_fused_pool_by_default(
+    retriever: HybridRetriever,
+) -> None:
+    """Ablation rows must be measured at the same depth or they prove nothing."""
+    dense = await retriever.search_branch("order", branch="dense")
+    assert len(dense) <= retriever.fused_limit
+    assert len(await retriever.search_branch("order", branch="dense", limit=3)) <= 3
+
+
+async def test_unknown_branch_is_rejected(retriever: HybridRetriever) -> None:
+    with pytest.raises(RetrievalError, match="unknown branch"):
+        await retriever.search_branch("order", branch="bm25")
+
+
+async def test_branch_search_rejects_an_empty_query(retriever: HybridRetriever) -> None:
+    with pytest.raises(RetrievalError, match="empty query"):
+        await retriever.search_branch("   ", branch="sparse")

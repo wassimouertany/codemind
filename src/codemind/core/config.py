@@ -32,6 +32,14 @@ class Settings(BaseSettings):
     while still amortising round-trips over a ~50k-chunk ingest."""
 
     # storage
+    index_tests: bool = False
+    """Whether test sources are indexed. Off by default.
+
+    Measured on petclinic: test files took 29-46% of every top-10, and the share
+    tracked recall monotonically (29% -> 0.839, 46% -> 0.628). No gold answer
+    lives in `src/test/`, yet tests share production vocabulary almost exactly,
+    so they can only ever displace a correct chunk. Turn this on to index a
+    repository *about* its tests, not to answer questions about its behaviour."""
     repos_dir: Path = Path("./.repos")
     """Where repositories are cloned. Keep it on the Linux filesystem: ingestion
     from /mnt/c crawls under WSL2."""
@@ -49,6 +57,14 @@ class Settings(BaseSettings):
     """Small on purpose. The GPU holds the LLM during serving, and on CPU a
     larger batch buys little while raising peak RSS against a 16 GB budget."""
     sparse_model: str = "Qdrant/bm25"
+    rerank_enabled: bool = False
+    """Whether the cross-encoder reranks fused candidates before synthesis.
+
+    Off by default: at Gate 1 reranking matches DBSF on Recall@10, loses 0.086
+    MRR, and costs 14s/query on CPU. The stage stays wired and tested; the
+    ablation harness selects configurations explicitly and ignores this flag,
+    so `hybrid_rerank` is still measured on every run.
+    """
     reranker_model: str = "BAAI/bge-reranker-base"
     reranker_device: Literal["cpu", "cuda"] = "cpu"
     reranker_batch_size: int = Field(16, ge=1, le=256)
@@ -76,11 +92,22 @@ class Settings(BaseSettings):
     sigma) and sums them, so a branch's confidence margin survives fusion. On
     the fixture, "find by customer id" ranks findByCustomerId 2nd under RRF
     (sparse is 8.8 vs 3.4 sure, but rank discards that) and 1st under DBSF."""
-    expansion_depth: int = Field(1, ge=0, le=3)
+    expansion_depth: int = Field(0, ge=0, le=3)
     """Call-graph hops pulled in around each reranked hit. 0 disables expansion.
-    Past 2 the neighbourhood grows faster than the context window."""
-    expansion_max_extra: int = Field(10, ge=0, le=100)
-    """Hard cap on appended neighbours, so one hub symbol cannot flood context."""
+
+    Off by default: at Gate 1 expansion costs 0.039 Recall@10 at fixed budget;
+    re-evaluated at Gate 2. The stage stays wired and tested — a graph
+    neighbour may well be worth more for answer completeness than for recall,
+    and that is Gate 2's question, not this one. Past 2 the neighbourhood grows
+    faster than the context window.
+    """
+    expansion_max_extra: int = Field(5, ge=0, le=100)
+    """Hard cap on appended neighbours, so one hub symbol cannot flood context.
+
+    Must stay below the final context budget: expansion walks *from* the
+    reranked hits, so a budget that leaves no reranked seeds leaves nothing to
+    expand. At a top-10 budget, 5 means "5 reranked hits plus up to 5 of their
+    graph neighbours"."""
     rerank_top_k: int = Field(5, ge=1, le=50)
 
     # observability

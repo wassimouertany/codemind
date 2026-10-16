@@ -21,3 +21,10 @@ evaluation/reports/*
 .repos/
 .import_linter_cache/
 .repos/
+
+# Reports are results, not artifacts — these are the record of what was measured
+!evaluation/reports/gate1_*.md
+!evaluation/reports/gate1_*.json
+# Reports are results, not artifacts
+!evaluation/reports/gate1_*.md
+!evaluation/reports/gate1_*.json

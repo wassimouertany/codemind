@@ -153,3 +153,30 @@ async def test_async_matches_sync(embedder: Embedder) -> None:
 def test_get_embedder_is_a_singleton() -> None:
     """Heavy models load once. A second load would double RSS for nothing."""
     assert get_embedder() is get_embedder()
+
+
+def test_cuda_request_falling_back_to_cpu_logs_a_warning(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """`cuda=True` is a request, not a guarantee.
+
+    Without onnxruntime-gpu and a matching CUDA runtime, fastembed builds a CPU
+    session silently and an ingest takes ten times longer with nothing in the
+    logs to explain it. Skips where CUDA genuinely works — there is no mismatch
+    to warn about there.
+    """
+    with caplog.at_level("WARNING", logger="codemind.retrieval.embedder"):
+        embedder = Embedder(Settings(embedding_device="cuda"))
+
+    providers = embedder._providers()
+    if any("CUDA" in provider for provider in providers):
+        pytest.skip(f"CUDA is actually available: {providers}")
+
+    assert "EMBEDDING_DEVICE=cuda" in caplog.text
+    assert "CPUExecutionProvider" in caplog.text
+
+
+def test_cpu_device_logs_no_device_warning(caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level("WARNING", logger="codemind.retrieval.embedder"):
+        Embedder(Settings(embedding_device="cpu"))
+    assert "EMBEDDING_DEVICE" not in caplog.text

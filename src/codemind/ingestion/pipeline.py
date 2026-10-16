@@ -131,7 +131,7 @@ class IngestionPipeline:
         root = await asyncio.to_thread(self._resolve_source, source)
         report = IngestionReport(repository=str(source), collection=self._store.collection_name)
 
-        loader = RepositoryLoader(root)
+        loader = RepositoryLoader(root, include_tests=self._settings.index_tests)
         sources = await asyncio.to_thread(loader.collect)
         report.load = loader.stats
         report.files = len(sources)

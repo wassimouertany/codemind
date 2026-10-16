@@ -963,6 +963,18 @@ Each item below was confirmed by running code on this commit.
     dense-only.
 14. **No latency or throughput numbers exist yet.** They wait on Langfuse
     (Day 13).
+15. **A file with no chunkable node yields zero chunks and is unretrievable.**
+    Measured on petclinic: 30 files load, 25 produce chunks. The five misses are
+    all `package-info.java`, which parse to `package_declaration` +
+    `block_comment` and declare no symbol — **correct** for Java. The same path
+    is **wrong** for a Python module of top-level statements (`settings.py`,
+    constants, Django config): probed directly, such a file yields 0 chunks.
+    TypeScript escapes it only because `type_alias_declaration` is a container
+    node.
+    *Fix:* a file-level fallback chunk when a parsed file yields nothing.
+    *Deferred:* it changes chunking and would invalidate the corpus the Gate 1
+    numbers were measured on. Scheduled after the Gate 1 commits, then re-run
+    the ablation and report both. Tracked in `OPEN_ISSUES.md`.
 
 ---
 
@@ -982,4 +994,7 @@ In build order:
    dense / sparse / hybrid(RRF) / hybrid(DBSF) / +rerank, reporting Recall@5,
    Recall@10, MRR and nDCG@10 in `evaluation/reports/week1_retrieval.md`. Pick
    the default `FUSION_METHOD` from that table.
-5. Wire models into the FastAPI lifespan.
+5. **Zero-chunk fallback** (§12.15) — file-level chunk for parsed files that
+   yield nothing; re-run the ablation afterwards and report before/after, since
+   it changes the corpus.
+6. Wire models into the FastAPI lifespan.
