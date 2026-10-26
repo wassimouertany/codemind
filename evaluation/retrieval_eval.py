@@ -364,6 +364,37 @@ def assert_questions_match(
         )
 
 
+def assert_cache_complete(
+    details: Sequence[dict[str, object]], queries: Sequence[GoldQuery]
+) -> None:
+    """Refuse to publish a report built from a partial cache.
+
+    A `--limit 3` smoke run writes three rows over the same filenames a full
+    run uses, and the resulting table looks ordinary — six configurations, a
+    plausible Recall@10 — while describing three questions. That exact mistake
+    published a stub as the Gate 1 result. A full run is
+    `len(CONFIGURATIONS) x len(queries)` rows with no gaps, so the check is
+    cheap and absolute.
+    """
+    expected_configs = [config.name for config in CONFIGURATIONS]
+    present = {(str(row["configuration"]), str(row["query_id"])) for row in details}
+    wanted = {(name, query.query_id) for name in expected_configs for query in queries}
+
+    if missing := wanted - present:
+        by_config: dict[str, int] = {}
+        for name, _ in missing:
+            by_config[name] = by_config.get(name, 0) + 1
+        gaps = ", ".join(f"{name} missing {count}" for name, count in sorted(by_config.items()))
+        raise CodeMindError(
+            f"refusing to write a report from a partial cache: expected "
+            f"{len(wanted)} rows ({len(expected_configs)} configurations x "
+            f"{len(queries)} questions), found {len(present & wanted)} — {gaps}. "
+            "Run the full ablation, or splice a partial run over a complete "
+            "cache with --only. A configuration missing every question was "
+            "skipped rather than partially run — check the skip messages above."
+        )
+
+
 def load_cached_details(path: Path = PER_QUERY_REPORT) -> list[dict[str, object]]:
     """Per-query rows from a previous run, or empty when there is no cache."""
     if not path.is_file():
@@ -522,6 +553,30 @@ def scale_caveat(files: int, chunks: int, final_k: int) -> str:
     )
 
 
+def device_provenance(summaries: Sequence[metrics.MetricSummary], settings: Settings) -> str:
+    """Name the hardware that produced the reranked rows.
+
+    Recall and MRR are properties of a ranking, not of the device that computed
+    it — but `RERANKER_DEVICE` is an env var precisely because the cross-encoder
+    moves between CPU and GPU depending on whether the LLM holds the card, and a
+    table that does not say which one ran cannot be reproduced. Latency is the
+    figure that does not transfer between the two, which is why this table does
+    not carry one.
+    """
+    reranked = {config.name for config in CONFIGURATIONS if config.rerank} & {
+        summary.configuration for summary in summaries
+    }
+    if not reranked:
+        return ""
+    return (
+        f"\nReranked rows were scored on **{settings.reranker_device}** "
+        f"(`RERANKER_DEVICE`), batch {settings.reranker_batch_size}, truncated to "
+        f"{settings.reranker_max_length} tokens. Device and batch size change "
+        f"throughput, not cross-encoder scores — per-query latency is hardware-bound "
+        f"and is deliberately not reported here.\n"
+    )
+
+
 def write_ablation_report(
     summaries: Sequence[metrics.MetricSummary],
     queries: Sequence[GoldQuery],
@@ -531,6 +586,7 @@ def write_ablation_report(
     details: Sequence[dict[str, object]] = (),
 ) -> Path:
     assert_questions_match(details, queries)
+    assert_cache_complete(details, queries)
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     lines = [
         "# Gate 1 — retrieval baseline\n",
@@ -542,6 +598,7 @@ def write_ablation_report(
         f"`PREFETCH_SPARSE={settings.prefetch_sparse}`) and returns "
         f"{final_k} chunks, so the rows differ by technique and not by depth.\n",
         scale_caveat(corpus[0], corpus[1], final_k),
+        device_provenance(summaries, settings),
         "\n## Ablation\n\n",
         metrics.to_markdown(summaries),
         "\nMisses = questions where no gold file was retrieved at all.\n",
@@ -624,8 +681,23 @@ async def run_evaluation(args: argparse.Namespace) -> int:
     print(metrics.to_markdown(summaries))
 
     if args.ablation:
-        report = write_ablation_report(summaries, queries, settings, args.final_k, corpus, details)
-        per_query = write_per_query_report(details)
+        # A partial run (--only / --config / --limit) must splice over the
+        # cache, never replace it: the published report has to describe the
+        # whole gold set, and `assert_cache_complete` is checked against it.
+        partial = bool(args.only or args.config or args.limit)
+        all_queries = load_goldset(args.goldset)
+        written = merge_details(load_cached_details(), details) if partial else list(details)
+        report_summaries = summaries_from_details(written, all_queries) if partial else summaries
+        try:
+            report = write_ablation_report(
+                report_summaries, all_queries, settings, args.final_k, corpus, written
+            )
+        except CodeMindError as exc:
+            # A refusal to publish is a normal outcome, not a crash: print it
+            # plainly and leave the existing report untouched.
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        per_query = write_per_query_report(written)
         print(f"  wrote {report}")
         print(f"  wrote {per_query}\n")
 

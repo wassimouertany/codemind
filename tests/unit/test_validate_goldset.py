@@ -398,3 +398,41 @@ def test_summaries_from_details_drops_queries_no_longer_in_the_goldset() -> None
         detail("dense_only", "removed-99", "gone", ["src/A.java"]),
     ]
     assert summaries_from_details(rows, queries)[0].queries == 1
+
+
+def test_assert_cache_complete_accepts_a_full_run() -> None:
+    from evaluation.retrieval_eval import CONFIGURATIONS, assert_cache_complete
+
+    queries = [query(id=f"q{i}") for i in range(3)]
+    rows = [
+        detail(config.name, q.query_id, q.question, ["src/A.java"])
+        for config in CONFIGURATIONS
+        for q in queries
+    ]
+    assert_cache_complete(rows, queries)  # must not raise
+
+
+def test_assert_cache_complete_rejects_a_smoke_run() -> None:
+    """The exact mistake that published a 3-question stub as the Gate 1 result."""
+    from evaluation.retrieval_eval import assert_cache_complete
+
+    queries = [query(id=f"q{i}") for i in range(30)]
+    rows = [detail("dense_only", f"q{i}", queries[i].question, ["src/A.java"]) for i in range(3)]
+
+    with pytest.raises(CodeMindError, match="partial cache") as exc_info:
+        assert_cache_complete(rows, queries)
+    message = str(exc_info.value)
+    assert "180 rows" in message, "the message must state the expected shape"
+    assert "--only" in message, "and name the way to fix it"
+
+
+def test_assert_cache_complete_rejects_a_missing_configuration() -> None:
+    from evaluation.retrieval_eval import CONFIGURATIONS, assert_cache_complete
+
+    queries = [query(id="q0")]
+    rows = [
+        detail(config.name, "q0", queries[0].question, ["src/A.java"])
+        for config in CONFIGURATIONS[:-1]
+    ]
+    with pytest.raises(CodeMindError, match=CONFIGURATIONS[-1].name):
+        assert_cache_complete(rows, queries)
