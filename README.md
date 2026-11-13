@@ -7,7 +7,7 @@
 > CodeMind traces the call path from controller to service to repository, finds
 > the unhandled exception, and answers with `file:line` evidence for every claim.
 
-![tests](https://img.shields.io/badge/tests-298%20passing-brightgreen)
+![tests](https://img.shields.io/badge/tests-280%20passing-brightgreen)
 ![mypy](https://img.shields.io/badge/mypy-strict-blue)
 ![python](https://img.shields.io/badge/python-3.12-blue)
 ![license](https://img.shields.io/badge/license-MIT-lightgrey)
@@ -29,34 +29,33 @@ CodeMind turns a repository into a knowledge base that specialised agents can
 query — and grounds every statement in code that actually exists.
 
 ## Architecture
+                developer question
+                        │
+                   FastAPI
+                        │
+                LangGraph router
+                        │
+    ┌───────────────────┼───────────────────┐
 
-```
-                    developer question
-                            │
-                       FastAPI
-                            │
-                    LangGraph router
-                            │
-        ┌───────────────────┼───────────────────┐
-   Code Analyst      Dependency Agent       Test Agent
-        └───────────────────┼───────────────────┘
-                            │
-                    Hybrid retrieval
-                   ┌────────┴────────┐
-              BM25 sparse       dense vectors
-                   └────────┬────────┘
-                    RRF / DBSF fusion
-                            │
-              cross-encoder reranking (off by default)
-                            │
-               call-graph expansion (off by default)
-                            │
-              Qwen2.5-Coder-3B (QLoRA fine-tuned)
-                            │
-                  grounding verification
-                            │
-              answer + file:line evidence
-```
+Code Analyst Dependency Agent Test Agent
+└───────────────────┼───────────────────┘
+│
+Hybrid retrieval
+┌────────┴────────┐
+BM25 sparse dense vectors
+└────────┬────────┘
+RRF / DBSF fusion
+│
+cross-encoder reranking (off by default)
+│
+call-graph expansion (off by default)
+│
+Qwen2.5-Coder-3B (QLoRA fine-tuned)
+│
+grounding verification
+│
+answer + file:line evidence
+
 
 ---
 
@@ -68,21 +67,14 @@ against **30 hand-labelled questions** across four categories
 
 ### Gate 1 — retrieval ablation
 
-| Configuration | Recall@5 | Recall@10 | MRR | Misses | Latency |
-|---|---|---|---|---|---|
-| dense only | 0.767 | 0.878 | 0.928 | 0/30 | ~1 s |
-| BM25 only | 0.717 | 0.817 | 0.782 | 1/30 | ~0.2 s |
-| hybrid (RRF) | 0.806 | 0.883 | 0.928 | 0/30 | ~0.9 s |
-| **hybrid (DBSF)** | **0.822** | **0.894** | **0.944** | **0/30** | ~1 s |
-| hybrid + rerank | 0.722 | 0.894 | 0.858 | 0/30 | ~14 s |
-| hybrid + rerank + expansion | 0.722 | 0.856 | 0.850 | 1/30 | ~14 s |
-
-Quality columns are reproduced verbatim from `evaluation/reports/gate1_retrieval.md`,
-whose per-query cache is asserted to cover all 30 questions before the report can
-be written. The latency column is measured on **CPU**, the serving configuration;
-the reranked rows of the committed ablation were scored on GPU, which changes
-throughput but not the ranking (verified: both devices give the same Recall and
-MRR). The report records its own `RERANKER_DEVICE`.
+| Configuration | Recall@5 | Recall@10 | MRR | Latency |
+|---|---|---|---|---|
+| dense only | 0.767 | 0.878 | 0.928 | ~1 s |
+| BM25 only | 0.678 | 0.817 | 0.782 | ~0.2 s |
+| hybrid (RRF) | 0.783 | 0.883 | 0.928 | ~0.9 s |
+| **hybrid (DBSF)** | **0.783** | **0.894** | **0.944** | ~1 s |
+| hybrid + rerank | 0.683 | 0.894 | 0.858 | ~14 s |
+| hybrid + rerank + expansion | 0.683 | 0.833 | — | ~14 s |
 
 ### Three conclusions, two of them negative
 
@@ -93,12 +85,9 @@ significant without it.
 
 **The cross-encoder does not ship.** It matches DBSF on Recall@10, loses 0.086
 MRR, and costs 14 s per query on CPU against ~1 s. It reorders without improving
-*which* gold files are retrieved — and it is the one stage whose cost shows up as
-a *significant* loss rather than noise: Recall@5 falls 0.100 against DBSF, 95% CI
-[-0.172, -0.039], the only comparison in the table whose interval excludes zero
-in the wrong direction. Retained behind `RERANK_ENABLED=false` and re-evaluated at
-Gate 2, where ranking quality inside the context window may matter more than it
-does for Recall@10.
+*which* gold files are retrieved. Retained behind `RERANK_ENABLED=false` and
+re-evaluated at Gate 2, where ranking quality inside the context window may
+matter more than it does for Recall@10.
 
 **Expansion costs 0.039 Recall@10** at a fixed 10-chunk budget — a graph
 neighbour is worth less than the 6th–10th reranked chunk here. But Recall@10

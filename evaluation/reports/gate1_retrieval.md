@@ -12,7 +12,7 @@ Corpus: **25 files / 99 chunks** after excluding tests. A top-10 is **~10% of th
 - Prefer **Recall@5** and **MRR**: both stay discriminative at this size, while Recall@10 saturates.
 - `Misses` (questions retrieving no gold file at all) is the figure that would survive a larger index.
 
-Reranked rows were scored on **cuda** (`RERANKER_DEVICE`), batch 16, truncated to 512 tokens. Device and batch size change throughput, not cross-encoder scores — per-query latency is hardware-bound and is deliberately not reported here.
+Reranked rows were scored on **cpu** (`RERANKER_DEVICE`), batch 16, truncated to 512 tokens. Device and batch size change throughput, not cross-encoder scores — per-query latency is hardware-bound and is deliberately not reported here.
 
 ## Ablation
 
