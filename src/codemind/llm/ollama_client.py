@@ -100,7 +100,13 @@ class OllamaClient:
         }
         if stop:
             options["stop"] = list(stop)
-        return {"model": self.model, "prompt": prompt, "stream": False, "options": options}
+        return {
+            "model": self.model,
+            "prompt": prompt,
+            "stream": False,
+            "keep_alive": self._settings.llm_keep_alive,
+            "options": options,
+        }
 
     async def _post(self, body: dict[str, Any]) -> str:
         """POST once per attempt; wrap every failure in `LLMError`."""
@@ -139,6 +145,12 @@ class OllamaClient:
         text = payload.get("response") if isinstance(payload, dict) else None
         if not isinstance(text, str):
             raise LLMError(f"Ollama response has no 'response' string: {str(payload)[:200]}")
+        if payload.get("prompt_eval_count", 0) >= self._settings.llm_num_ctx:
+            logger.warning(
+                "prompt filled the %d-token context; Ollama drops the start of an "
+                "overlong prompt silently — the instructions may be gone",
+                self._settings.llm_num_ctx,
+            )
         if payload.get("done_reason") == "length":
             logger.warning("ollama hit num_predict before finishing; output is truncated")
         return text

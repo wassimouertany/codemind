@@ -5,19 +5,21 @@
   Each category is defined by the shape of the question, not its topic: the
   3B model read topical definitions ("errors, exceptions, validation") as a
   reason to call nearly everything a bug — 31% on the dev set. Shape cues and
-  two examples per route took it to 87.5%.
+  two examples per route took it to 87.5%, and to 88.9% (16/18) on the
+  bug/architecture/dependency/locator dev set. Both remaining dev misses are
+  questions a human could file either way.
 
   Tuned on evaluation/datasets/router_dev.jsonl, disjoint from
-  tests/fixtures/router_questions.jsonl, and
-  the examples are not about petclinic, so the held-out score is not fitted
-  to the questions it is measured on. Re-tune on the dev set, not on those.
+  tests/fixtures/router_questions.jsonl, and the examples are not about
+  petclinic, so the held-out score is not fitted to the questions it is
+  measured on. Re-tune on the dev set, never on the held-out questions.
 #}
 Classify a question about a software repository into exactly one category.
 
 - bug: asks WHY something fails, errors, throws, or behaves wrongly. Usually starts with "Why does/would ... fail".
 - architecture: asks HOW something is designed, configured, defined or structured. Usually starts with "How is/are/does".
 - dependency: asks WHICH classes or components use, call, inherit from, or interact with something. Usually starts with "Which" or "What classes/components".
-- test: asks about the TESTS themselves: what tests cover, assert, or mock, or whether test coverage exists.
+- locator: asks WHERE something is — which file or class contains it. Usually starts with "Where is".
 
 Examples:
 Q: Why does POST /orders sometimes return 500?
@@ -32,9 +34,9 @@ Q: Which services call the PaymentGateway client?
 {"route": "dependency"}
 Q: What components are involved when an invoice is emailed?
 {"route": "dependency"}
-Q: Which tests exercise the refund flow, and what do they mock?
-{"route": "test"}
-Q: Is there test coverage for the CSV export?
-{"route": "test"}
+Q: Where is the class that parses uploaded CSV files?
+{"route": "locator"}
+Q: Where is the endpoint that deletes a user account?
+{"route": "locator"}
 
 Q: {{ question }}

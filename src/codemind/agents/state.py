@@ -20,18 +20,24 @@ from __future__ import annotations
 
 import operator
 from enum import StrEnum
-from typing import Annotated, TypedDict
+from typing import Annotated, Protocol, TypedDict, TypeVar
 
 from codemind.retrieval.schemas import ScoredChunk
 
 
 class Route(StrEnum):
-    """What kind of question this is. The router's only output."""
+    """What kind of question this is. The router's only output.
+
+    The four categories of the Gate 1 gold set (7/7/8/8 of 30). There is no
+    `test` route: the gold set has no test questions, and with `INDEX_TESTS`
+    off retrieval could never return a test file to answer one from. Test
+    suggestions belong in the bug route's output instead.
+    """
 
     BUG = "bug"
     ARCHITECTURE = "architecture"
     DEPENDENCY = "dependency"
-    TEST = "test"
+    LOCATOR = "locator"
 
 
 DEFAULT_ROUTE = Route.BUG
@@ -73,6 +79,37 @@ class RouterUpdate(TypedDict, total=False):
     route: list[Route]
     messages: list[AgentMessage]
     errors: list[str]
+
+
+class RetrieveUpdate(TypedDict, total=False):
+    """The keys the retrieve node owns. Each pass counts as one attempt, so the
+    grounding retry (Day 12) can tell a first pass from an expanded one."""
+
+    retrieved: list[ScoredChunk]
+    attempts: int
+    messages: list[AgentMessage]
+    errors: list[str]
+
+
+class AnalysisUpdate(TypedDict, total=False):
+    """The keys a specialist (code analyst, dependency agent, locator) owns."""
+
+    evidence: list[Evidence]
+    messages: list[AgentMessage]
+    errors: list[str]
+
+
+UpdateT_co = TypeVar("UpdateT_co", covariant=True)
+
+
+class Node(Protocol[UpdateT_co]):
+    """A graph node returning the update type it owns.
+
+    A protocol rather than `Callable`: LangGraph calls nodes as `node(state=...)`,
+    and a bare `Callable[[CodeMindState], ...]` cannot promise a parameter name.
+    """
+
+    async def __call__(self, state: CodeMindState) -> UpdateT_co: ...
 
 
 def initial_state(question: str) -> CodeMindState:

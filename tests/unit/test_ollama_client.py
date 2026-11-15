@@ -47,6 +47,7 @@ def settings(**overrides: object) -> Settings:
         "llm_temperature": 0.3,
         "llm_num_ctx": 4096,
         "llm_max_retries": 3,
+        "llm_keep_alive": "30m",
     }
     return Settings(**(base | overrides))  # type: ignore[arg-type]
 
@@ -102,8 +103,18 @@ async def test_generate_posts_settings_to_api_generate() -> None:
         "model": "test-model",
         "prompt": "say hi",
         "stream": False,
+        "keep_alive": "30m",
         "options": {"num_ctx": 4096, "num_predict": 256, "temperature": 0.3},
     }
+
+
+async def test_keep_alive_comes_from_settings_on_every_call() -> None:
+    """Ollama unloads after 5 minutes by default; a reload costs ~69s on this card."""
+    recorder = Recorder(ok('{"colour": "red"}'))
+    client = make_client(recorder, llm_keep_alive="-1")
+    await client.generate("p")
+    await client.generate_structured("p", Pick)
+    assert [json.loads(r.content)["keep_alive"] for r in recorder.requests] == ["-1", "-1"]
 
 
 async def test_per_call_arguments_override_settings() -> None:
@@ -220,6 +231,23 @@ async def test_truncated_generation_is_returned_with_a_warning(
         text = await make_client(Recorder(ok("partial", done_reason="length"))).generate("p")
     assert text == "partial"
     assert "truncated" in caplog.text
+
+
+async def test_a_prompt_that_fills_the_context_window_warns(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Ollama truncates an overlong prompt from the front without an error."""
+    with caplog.at_level("WARNING", logger="codemind.llm.ollama_client"):
+        await make_client(Recorder(ok("x", prompt_eval_count=4096))).generate("p")
+    assert "4096-token context" in caplog.text
+
+
+async def test_a_prompt_within_the_context_window_does_not_warn(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    with caplog.at_level("WARNING", logger="codemind.llm.ollama_client"):
+        await make_client(Recorder(ok("x", prompt_eval_count=4095))).generate("p")
+    assert not caplog.text
 
 
 async def test_context_manager_closes_the_http_client() -> None:

@@ -11,9 +11,10 @@ from pydantic import ValidationError
 
 from codemind.agents.nodes.router import make_router
 from codemind.agents.state import Route, current_route, initial_state
-from codemind.core.exceptions import LLMError
+from codemind.core.exceptions import LLMError, RetrievalError
+from codemind.core.types import CodeChunk, Language, Layer
 from codemind.llm.base import LLMClient, ModelT
-from codemind.retrieval.schemas import RetrievalResult
+from codemind.retrieval.schemas import RetrievalResult, ScoredChunk
 
 ROUTER_QUESTIONS = Path(__file__).parent / "fixtures" / "router_questions.jsonl"
 
@@ -21,7 +22,7 @@ ROUTER_QUESTIONS = Path(__file__).parent / "fixtures" / "router_questions.jsonl"
 @dataclass(frozen=True, slots=True)
 class RouterCase:
     source: str
-    """A Gate 1 gold-set id, or "handwritten" — the gold set has no test-category questions."""
+    """The Gate 1 gold-set id the question and its label come from."""
     question: str
     route: Route
 
@@ -61,9 +62,48 @@ class StubLLM:
             raise LLMError(f"does not match {schema.__name__}: {answer!r}") from exc
 
 
+def scored(
+    symbol: str,
+    *,
+    path: str = "src/main/java/demo/OwnerController.java",
+    lines: tuple[int, int] = (10, 20),
+    score: float = 0.5,
+    parent: str | None = "OwnerController",
+    imports: Sequence[str] = (),
+    body: str | None = None,
+) -> ScoredChunk:
+    """A retrieved chunk with a real path and line range, for nodes to cite."""
+    return ScoredChunk(
+        chunk=CodeChunk(
+            relative_path=path,
+            language=Language.JAVA,
+            symbol_name=symbol,
+            kind="method",
+            start_line=lines[0],
+            end_line=lines[1],
+            body=body or f"public void {symbol}() {{ }}",
+            context_header=f"{path} | demo | {parent} | void {symbol}()",
+            layer=Layer.CONTROLLER,
+            parent_symbol=parent,
+            imports=list(imports),
+        ),
+        score=score,
+    )
+
+
+@dataclass
 class StubRetriever:
+    """A `Retriever` returning fixed chunks, in exactly the order given."""
+
+    chunks: list[ScoredChunk] = field(default_factory=list)
+    error: RetrievalError | None = None
+    queries: list[str] = field(default_factory=list)
+
     async def search(self, query: str) -> RetrievalResult:
-        return RetrievalResult(query=query)
+        self.queries.append(query)
+        if self.error is not None:
+            raise self.error
+        return RetrievalResult(query=query, chunks=list(self.chunks))
 
 
 async def route_accuracy(llm: LLMClient, cases: Sequence[RouterCase]) -> tuple[float, list[str]]:

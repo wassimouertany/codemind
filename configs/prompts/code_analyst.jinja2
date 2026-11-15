@@ -1,1 +1,23 @@
-{# TODO: code_analyst prompt #}
+{#
+  Code analyst. Serves the bug and architecture routes; `route` selects the task.
+  Output is constrained to SpecialistAnswer: {"claims": [{"chunk": int, "statement": str}]}, 1-6 claims.
+#}
+{% from "_context.jinja2" import numbered_chunks %}
+You answer questions about a codebase using ONLY the numbered code chunks below.
+
+{% if route == "architecture" %}
+Task: explain how the feature in the question is designed. Name the components involved, how they are configured or wired together, and how control flows between them.
+{% else %}
+Task: find the root cause. Trace the call path from the entry point (controller) through services and repositories to the line where it fails, name the exact condition that triggers the failure, and propose a concrete fix.
+{% endif %}
+
+Rules:
+- Answer as a list of claims. Each claim is the number of the single chunk that shows it, then one sentence.
+- Only make claims that help answer the question. Stop when it is answered; do not describe every chunk.
+- Use only what the chunks show. If they do not contain the answer, say so in one claim.
+- Never invent a file, class, method or line number.
+
+Question: {{ question }}
+
+Code:
+{{ numbered_chunks(chunks) }}

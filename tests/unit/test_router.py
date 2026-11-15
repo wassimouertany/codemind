@@ -30,8 +30,12 @@ def test_labelled_set_has_three_questions_per_route() -> None:
         assert sum(case.route is route for case in CASES) == 3, route
 
 
-def test_labelled_bug_architecture_dependency_questions_come_from_the_gold_set() -> None:
-    assert all(c.source != "handwritten" for c in CASES if c.route is not Route.TEST)
+def test_every_labelled_question_is_a_gold_set_question_with_its_gold_label() -> None:
+    gold = (
+        Path(__file__).resolve().parents[2] / "evaluation" / "datasets" / "retrieval_goldset.jsonl"
+    )
+    labels = {row["id"]: row["category"] for row in map(json.loads, gold.read_text().splitlines())}
+    assert all(labels[c.source] == c.route.value for c in CASES)
 
 
 async def test_router_carries_each_label_through_to_state() -> None:
@@ -82,9 +86,9 @@ async def test_failures_default_to_bug_and_are_recorded(failure: LLMError) -> No
 
 async def test_an_answer_outside_the_enum_falls_back_instead_of_adding_a_route() -> None:
     """A backend that ignores the grammar must not smuggle a fifth route in."""
-    update = await make_router(StubLLM(lambda p, s: {"route": "locator"}))(initial_state("q"))
+    update = await make_router(StubLLM(lambda p, s: {"route": "test"}))(initial_state("q"))
     assert update["route"] == [Route.BUG]
-    assert "locator" in update["errors"][0]
+    assert "test" in update["errors"][0]
 
 
 def test_router_prompt_names_every_route() -> None:

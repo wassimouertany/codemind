@@ -87,6 +87,11 @@ class Settings(BaseSettings):
     prompt eval. A tight timeout would turn every cold start into a retry."""
     llm_max_retries: int = Field(3, ge=1, le=10)
     """Attempts on connection failures and read timeouts only. Never on 4xx."""
+    llm_keep_alive: str = "30m"
+    """How long Ollama keeps the model in VRAM after a request ("30m", "1h", "-1"
+    for forever, "0" to unload at once). Ollama's default is 5m, and a reload
+    measured 69s cold against 0.15s warm — it would dominate every latency
+    trace. Nothing else needs the card while serving, so 30m costs nothing."""
 
     # retrieval
     prefetch_dense: int = Field(20, ge=1, le=200)
@@ -115,6 +120,13 @@ class Settings(BaseSettings):
     expand. At a top-10 budget, 5 means "5 reranked hits plus up to 5 of their
     graph neighbours"."""
     rerank_top_k: int = Field(5, ge=1, le=50)
+    final_k: int = Field(10, ge=1, le=50)
+    """Chunks the retrieve node hands to the specialists, cut from the front of
+    the retriever's ranking. 10 is the depth every Gate 1 row was measured at."""
+    locator_top_k: int = Field(5, ge=1, le=50)
+    """Hits a locator answer lists. At Gate 1 the first gold chunk was rank 1 for
+    7 of 8 locator questions and rank 2 for the eighth; 5 leaves headroom
+    without padding the answer with the 6th-10th chunk."""
 
     # agents
     graph_recursion_limit: int = Field(25, ge=1, le=100)

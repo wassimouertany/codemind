@@ -13,11 +13,10 @@ confident classification.
 from __future__ import annotations
 
 import logging
-from typing import Protocol
 
 from pydantic import BaseModel
 
-from codemind.agents.state import DEFAULT_ROUTE, CodeMindState, Route, RouterUpdate
+from codemind.agents.state import DEFAULT_ROUTE, CodeMindState, Node, Route, RouterUpdate
 from codemind.core.exceptions import LLMError
 from codemind.llm.base import LLMClient
 from codemind.llm.prompts import render_prompt
@@ -33,13 +32,7 @@ class RouteDecision(BaseModel):
     route: Route
 
 
-class RouterNode(Protocol):
-    """A node LangGraph can call as `node(state=...)`; a bare `Callable` cannot promise that."""
-
-    async def __call__(self, state: CodeMindState) -> RouterUpdate: ...
-
-
-def make_router(llm: LLMClient) -> RouterNode:
+def make_router(llm: LLMClient) -> Node[RouterUpdate]:
     """Bind the router to an `LLMClient`; the graph registers the result as a node."""
 
     async def router(state: CodeMindState) -> RouterUpdate:

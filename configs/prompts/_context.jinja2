@@ -1,0 +1,18 @@
+{#
+  Numbered code context shared by the specialist prompts. The numbers are the
+  citation keys: the node maps [n] back to chunks[n-1]'s real path and lines,
+  so they must start at 1 and follow the retriever's order exactly.
+#}
+{% macro numbered_chunks(chunks, show_imports=false) %}
+{% for chunk in chunks %}
+[{{ loop.index }}] {{ chunk.relative_path }}:{{ chunk.start_line }}-{{ chunk.end_line }}{% if chunk.context_header %} | {{ chunk.context_header }}{% endif %}
+
+{% if show_imports and chunk.imports %}
+imports: {{ chunk.imports | join(", ") }}
+{% endif %}
+```{{ chunk.language.value }}
+{{ chunk.body }}
+```
+
+{% endfor %}
+{% endmacro %}

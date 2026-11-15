@@ -11,6 +11,8 @@
 {"source": "dep-06", "question": "Which components interact when binding and validating pet form submissions?", "route": "dependency"}
 {"source": "dep-07", "question": "What classes are involved in populating pet type dropdown options across owner forms?", "route": "dependency"}
 {"source": "dep-08", "question": "What Java classes form the DTO and controller layer for vet XML/JSON output?", "route": "dependency"}
-{"source": "dev", "question": "What do the tests for VisitController assert about the visit form?", "route": "test"}
-{"source": "dev", "question": "Are there integration tests that run against a real MySQL database?", "route": "test"}
-{"source": "dev", "question": "Which test classes mock the OwnerRepository, and why?", "route": "test"}
+{"source": "loc-02", "question": "Where is the controller handling owner creation and updates?", "route": "locator"}
+{"source": "loc-03", "question": "Where is the repository interface defining pet type lookup methods?", "route": "locator"}
+{"source": "loc-05", "question": "Where is the custom validator class for checking pet properties?", "route": "locator"}
+{"source": "loc-06", "question": "Where is the main entry point class with the main method for Spring Boot?", "route": "locator"}
+{"source": "loc-08", "question": "Where is the controller handling pet visit registrations?", "route": "locator"}

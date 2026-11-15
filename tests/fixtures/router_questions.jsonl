@@ -7,6 +7,6 @@
 {"source": "dep-01", "question": "What Java components depend directly on the Specialty entity?", "route": "dependency"}
 {"source": "dep-03", "question": "Which Java classes use the pet type repository to look up pet types?", "route": "dependency"}
 {"source": "dep-05", "question": "Which domain models inherit from the Person base class?", "route": "dependency"}
-{"source": "handwritten", "question": "Which tests cover searching for owners by last name in OwnerController?", "route": "test"}
-{"source": "handwritten", "question": "How is PetValidator unit tested, and what do its tests mock?", "route": "test"}
-{"source": "handwritten", "question": "Is there any test coverage for the vet listing XML endpoint?", "route": "test"}
+{"source": "loc-01", "question": "Where is the pet type converter or formatter class defined?", "route": "locator"}
+{"source": "loc-04", "question": "Where is the controller endpoint that intentionally throws a RuntimeException for testing?", "route": "locator"}
+{"source": "loc-07", "question": "Where is the controller class managing vet listings and specialty displays?", "route": "locator"}
