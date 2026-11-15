@@ -70,26 +70,34 @@ against **30 hand-labelled questions** across four categories
 | Configuration | Recall@5 | Recall@10 | MRR | Latency |
 |---|---|---|---|---|
 | dense only | 0.767 | 0.878 | 0.928 | ~1 s |
-| BM25 only | 0.678 | 0.817 | 0.782 | ~0.2 s |
-| hybrid (RRF) | 0.783 | 0.883 | 0.928 | ~0.9 s |
-| **hybrid (DBSF)** | **0.783** | **0.894** | **0.944** | ~1 s |
-| hybrid + rerank | 0.683 | 0.894 | 0.858 | ~14 s |
-| hybrid + rerank + expansion | 0.683 | 0.833 | — | ~14 s |
+| BM25 only | 0.717 | 0.817 | 0.782 | ~0.2 s |
+| hybrid (RRF) | 0.806 | 0.883 | 0.928 | ~0.9 s |
+| **hybrid (DBSF)** | **0.822** | **0.894** | **0.944** | ~1 s |
+| hybrid + rerank | 0.722 | 0.894 | 0.858 | ~14 s |
+| hybrid + rerank + expansion | 0.722 | 0.856 | 0.850 | ~14 s |
+
+All deltas carry a paired bootstrap 95% CI (10k resamples, same 30 questions).
 
 ### Three conclusions, two of them negative
 
-**Hybrid beats dense-only** — but by 0.016 Recall@10 across 30 questions, which
-is roughly half a question. A paired bootstrap (10k iterations, 95% CI) is
-reported alongside every comparison; a delta this size is not claimed as
-significant without it.
+**Fusion beats its own sparse branch, significantly.** `sparse_only → hybrid_rrf`
+is +0.089 Recall@5 `[+0.022, +0.178]` and +0.067 Recall@10 `[+0.017, +0.128]`.
 
-**The cross-encoder does not ship.** It matches DBSF on Recall@10, loses 0.086
-MRR, and costs 14 s per query on CPU against ~1 s. It reorders without improving
-*which* gold files are retrieved. Retained behind `RERANK_ENABLED=false` and
+**Hybrid vs dense-only is *not* distinguishable at n=30.** DBSF leads on every
+metric, but `dense_only → hybrid_dbsf` is +0.056 Recall@5 `[-0.017, +0.133]` —
+the interval spans zero. DBSF ships because it leads on all five measures and
+costs nothing extra, not because the gap is proven.
+
+**The cross-encoder does not ship — and the regression is significant.**
+`hybrid_dbsf → hybrid_rerank` is **−0.100 Recall@5, 95% CI [-0.172, -0.039]**:
+the interval excludes zero. It matches DBSF on Recall@10, loses 0.086 MRR, and
+costs ~14 s per query on CPU against ~1 s. It reorders without improving *which*
+gold files are retrieved, and actively pushes them down. Retained behind
+`RERANK_ENABLED=false` and
 re-evaluated at Gate 2, where ranking quality inside the context window may
 matter more than it does for Recall@10.
 
-**Expansion costs 0.039 Recall@10** at a fixed 10-chunk budget — a graph
+**Expansion costs 0.038 Recall@10** at a fixed 10-chunk budget — a graph
 neighbour is worth less than the 6th–10th reranked chunk here. But Recall@10
 asks "did the gold file appear in the context", and expansion exists to supply
 the *caller and callee* of a failing method. That is a Gate 2 question.
@@ -100,7 +108,7 @@ the *caller and callee* of a failing method. That is a Gate 2 question.
 | | |
 |---|---|
 | Symbol-graph call resolution | **90.7%** of resolvable call sites |
-| Ingestion | 30 files → 99 chunks, zero parse errors |
+| Ingestion | 25 files → 99 chunks, zero parse errors |
 | Chunk size | median 273 chars, p95 1338 |
 | Local inference | 58.6 tok/s (Qwen2.5-Coder-3B Q4_K_M, RTX 3050) |
 
