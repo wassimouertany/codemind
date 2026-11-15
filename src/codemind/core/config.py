@@ -129,6 +129,9 @@ class Settings(BaseSettings):
     without padding the answer with the 6th-10th chunk."""
 
     # agents
+    tool_read_max_lines: int = Field(200, ge=1, le=5000)
+    """Most lines `read_file` returns in one call. A request past it is refused,
+    not truncated: a silently shortened slice reads as the whole function."""
     graph_recursion_limit: int = Field(25, ge=1, le=100)
     """Supersteps per graph run. A hit almost always means a routing-prompt
     bug that loops, not a limit that is too low — fix the prompt first."""

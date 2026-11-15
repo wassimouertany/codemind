@@ -198,7 +198,7 @@ def scored_chunk(symbol: str) -> object:
 
 def test_backfill_tops_up_a_short_list_to_final_k() -> None:
     """A symbol with no callers must not yield a 6-chunk configuration."""
-    from evaluation.retrieval_eval import backfill
+    from codemind.retrieval.pipeline import backfill
 
     seeds = [scored_chunk(f"seed{i}") for i in range(5)]
     remainder = [scored_chunk(f"tail{i}") for i in range(5)]
@@ -210,7 +210,7 @@ def test_backfill_tops_up_a_short_list_to_final_k() -> None:
 
 def test_backfill_leaves_a_full_list_untouched() -> None:
     """When expansion found enough neighbours, nothing is backfilled."""
-    from evaluation.retrieval_eval import backfill
+    from codemind.retrieval.pipeline import backfill
 
     full = [scored_chunk(f"c{i}") for i in range(10)]
     remainder = [scored_chunk("unused")]
@@ -221,7 +221,7 @@ def test_backfill_leaves_a_full_list_untouched() -> None:
 
 def test_backfill_skips_chunks_already_present() -> None:
     """A neighbour may already sit in the displaced reranked tail."""
-    from evaluation.retrieval_eval import backfill
+    from codemind.retrieval.pipeline import backfill
 
     shared = scored_chunk("shared")
     out = backfill([scored_chunk("seed"), shared], [shared, scored_chunk("fresh")], 3)
@@ -232,14 +232,14 @@ def test_backfill_skips_chunks_already_present() -> None:
 
 
 def test_backfill_truncates_an_overlong_list() -> None:
-    from evaluation.retrieval_eval import backfill
+    from codemind.retrieval.pipeline import backfill
 
     assert len(backfill([scored_chunk(f"c{i}") for i in range(12)], [], 10)) == 10
 
 
 def test_backfill_cannot_exceed_available_chunks() -> None:
     """Fewer chunks than k in total is a valid state, not an error."""
-    from evaluation.retrieval_eval import backfill
+    from codemind.retrieval.pipeline import backfill
 
     assert len(backfill([scored_chunk("a")], [scored_chunk("b")], 10)) == 2
 

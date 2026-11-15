@@ -61,8 +61,15 @@ class SpecialistAnswer(BaseModel):
     claims: list[Claim] = Field(min_length=1, max_length=MAX_CLAIMS)
 
 
-def make_specialist(name: str, llm: LLMClient) -> Node[AnalysisUpdate]:
-    """A specialist node named `name`, prompted by `configs/prompts/<name>.jinja2`."""
+def make_specialist(
+    name: str, llm: LLMClient, *, prompt: str | None = None
+) -> Node[AnalysisUpdate]:
+    """A specialist node named `name`, prompted by `configs/prompts/<prompt>.jinja2`.
+
+    `name` is what the trace shows; `prompt` defaults to it. They differ when one
+    prompt serves several routes, so each route still gets its own span.
+    """
+    template = prompt or name
 
     async def specialist(state: CodeMindState) -> AnalysisUpdate:
         chunks = state.get("retrieved") or []
@@ -72,14 +79,14 @@ def make_specialist(name: str, llm: LLMClient) -> Node[AnalysisUpdate]:
                 "messages": [{"node": name, "content": "No code was retrieved for this question."}],
             }
 
-        prompt = render_prompt(
-            name,
+        rendered = render_prompt(
+            template,
             question=state["question"],
             route=current_route(state).value,
             chunks=[scored.chunk for scored in chunks],
         )
         try:
-            answer = await llm.generate_structured(prompt, SpecialistAnswer)
+            answer = await llm.generate_structured(rendered, SpecialistAnswer)
         except LLMError as exc:
             logger.warning("%s produced no usable analysis: %s", name, exc)
             return {

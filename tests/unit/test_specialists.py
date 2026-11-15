@@ -44,7 +44,7 @@ def answering(*claims: tuple[int, str]) -> StubLLM:
 
 async def test_prompt_numbers_chunks_with_real_locations_and_asks_the_question() -> None:
     llm = answering((1, "x"))
-    await make_code_analyst(llm)(state_with(Route.BUG))
+    await make_code_analyst(llm, Route.BUG)(state_with(Route.BUG))
 
     prompt = llm.prompts[0]
     assert llm.schemas == [SpecialistAnswer]
@@ -57,8 +57,8 @@ async def test_prompt_numbers_chunks_with_real_locations_and_asks_the_question()
 
 async def test_bug_route_asks_for_a_root_cause_and_architecture_for_design() -> None:
     bug, arch = answering((1, "x")), answering((1, "x"))
-    await make_code_analyst(bug)(state_with(Route.BUG))
-    await make_code_analyst(arch)(state_with(Route.ARCHITECTURE))
+    await make_code_analyst(bug, Route.BUG)(state_with(Route.BUG))
+    await make_code_analyst(arch, Route.ARCHITECTURE)(state_with(Route.ARCHITECTURE))
 
     assert "root cause" in bug.prompts[0]
     assert "root cause" not in arch.prompts[0]
@@ -73,7 +73,7 @@ async def test_dependency_agent_sees_imports() -> None:
 
 async def test_each_claim_resolves_to_its_chunks_path_and_lines() -> None:
     llm = answering((1, "processCreationForm calls save"), (2, "save persists the owner"))
-    update = await make_code_analyst(llm)(state_with(Route.BUG))
+    update = await make_code_analyst(llm, Route.BUG)(state_with(Route.BUG))
 
     assert update["evidence"] == [
         {
@@ -91,7 +91,7 @@ async def test_each_claim_resolves_to_its_chunks_path_and_lines() -> None:
     ]
     assert update["messages"] == [
         {
-            "node": "code_analyst",
+            "node": "bug_analyst",
             "content": "processCreationForm calls save [1]\nsave persists the owner [2]",
         }
     ]
@@ -102,7 +102,7 @@ async def test_each_claim_resolves_to_its_chunks_path_and_lines() -> None:
 async def test_a_claim_citing_an_unretrieved_chunk_is_dropped_everywhere(bad: int) -> None:
     """Measured: the 3B model cited [13] and [17] with 10 chunks in context."""
     llm = answering((1, "real"), (bad, "invented"))
-    update = await make_code_analyst(llm)(state_with(Route.BUG))
+    update = await make_code_analyst(llm, Route.BUG)(state_with(Route.BUG))
 
     assert [e["claim"] for e in update["evidence"]] == ["real"]
     assert "invented" not in update["messages"][0]["content"]
@@ -113,11 +113,11 @@ async def test_a_claim_citing_an_unretrieved_chunk_is_dropped_everywhere(bad: in
 async def test_nothing_retrieved_means_no_llm_call_and_no_evidence() -> None:
     """A 3B model asked to explain code it cannot see will explain code anyway."""
     llm = answering((1, "invented"))
-    update = await make_code_analyst(llm)(state_with(Route.BUG, chunks=[]))
+    update = await make_code_analyst(llm, Route.BUG)(state_with(Route.BUG, chunks=[]))
 
     assert llm.prompts == []
     assert "evidence" not in update
-    assert update["errors"] == ["code_analyst: no retrieved context; analysis skipped"]
+    assert update["errors"] == ["bug_analyst: no retrieved context; analysis skipped"]
 
 
 async def test_an_llm_failure_is_recorded_not_raised() -> None:
@@ -140,5 +140,25 @@ def test_the_schema_bounds_claims_and_statement_length_for_the_grammar() -> None
 
 
 async def test_returns_only_the_keys_it_owns() -> None:
-    update = await make_code_analyst(answering((5, "bad")))(state_with(Route.BUG))
+    update = await make_code_analyst(answering((5, "bad")), Route.BUG)(state_with(Route.BUG))
     assert set(update) <= {"evidence", "messages", "errors"}
+
+
+async def test_both_analyst_routes_share_one_prompt_but_get_their_own_node_name() -> None:
+    """Spans are named after nodes; Day 13 must see which route each one answered."""
+    bug, arch = answering((1, "x")), answering((1, "x"))
+    bug_update = await make_code_analyst(bug, Route.BUG)(state_with(Route.BUG))
+    arch_update = await make_code_analyst(arch, Route.ARCHITECTURE)(state_with(Route.ARCHITECTURE))
+
+    assert bug_update["messages"][0]["node"] == "bug_analyst"
+    assert arch_update["messages"][0]["node"] == "architecture_analyst"
+    assert bug.prompts[0].startswith(arch.prompts[0][:60])  # same template
+
+
+def test_specialist_prompts_forbid_line_numbers_in_claims() -> None:
+    """The citation carries the range; Day 12 flags any bare line reference."""
+    from codemind.llm.prompts import render_prompt
+
+    for name in ("code_analyst", "dependency_agent"):
+        prompt = render_prompt(name, question="q", route="bug", chunks=[])
+        assert "Never write a line number in a claim" in prompt

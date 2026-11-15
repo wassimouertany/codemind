@@ -52,6 +52,7 @@ from codemind.ingestion.symbol_graph import SymbolGraph
 from codemind.retrieval.embedder import Embedder
 from codemind.retrieval.expansion import GraphExpander
 from codemind.retrieval.hybrid import HybridRetriever
+from codemind.retrieval.pipeline import compose
 from codemind.retrieval.qdrant_store import DENSE_VECTOR, SPARSE_VECTOR, QdrantStore
 from codemind.retrieval.reranker import Reranker
 from codemind.retrieval.schemas import ScoredChunk
@@ -177,38 +178,34 @@ class Harness:
         if self._reranker is None:  # pragma: no cover - guarded by needs_rerank
             raise CodeMindError("reranker was not loaded for a reranking configuration")
 
-        reranked = await self._reranker.rerank(question, chunks, top_k=self._final_k)
         if not config.expand:
-            return reranked
+            return await compose(question, chunks, final_k=self._final_k, reranker=self._reranker)
 
         graph = self.load_graph()
         if graph is None:
             raise CodeMindError(
                 f"no symbol graph at {self.graph_path} — run scripts/ingest_repo.py first"
             )
-        # Seeds keep the top of the list; neighbours compete for the tail.
-        # `expansion_max_extra` must leave at least one seed to walk from.
-        extra_budget = min(self._settings.expansion_max_extra, self._final_k - 1)
-        seeds, remainder = (
-            reranked[: self._final_k - extra_budget],
-            reranked[self._final_k - extra_budget :],
-        )
         # The shipped default is EXPANSION_DEPTH=0 (off, on Gate 1 evidence).
         # The ablation row exists to *measure* the stage, so it forces at least
         # one hop — otherwise this row silently becomes a copy of
         # hybrid_rerank and the table stops saying anything about expansion.
+        # Composition itself is `retrieval.pipeline.compose`, the same code the
+        # agent graph runs, so this row measures what ships.
         expander = GraphExpander(
             self._store,
             graph,
             self._settings.model_copy(
-                update={
-                    "expansion_max_extra": extra_budget,
-                    "expansion_depth": max(1, self._settings.expansion_depth),
-                }
+                update={"expansion_depth": max(1, self._settings.expansion_depth)}
             ),
         )
-        expanded = await expander.expand(seeds)
-        return backfill(expanded, remainder, self._final_k)
+        return await compose(
+            question,
+            chunks,
+            final_k=self._final_k,
+            reranker=self._reranker,
+            expander=expander,
+        )
 
     async def corpus_stats(self) -> tuple[int, int]:
         """(distinct files, chunks) in the collection — the report's denominator."""
@@ -444,29 +441,6 @@ def summaries_from_details(
         for config in CONFIGURATIONS
         if config.name in grouped
     ]
-
-
-def backfill(
-    chunks: Sequence[ScoredChunk], remainder: Sequence[ScoredChunk], final_k: int
-) -> list[ScoredChunk]:
-    """Top up `chunks` from `remainder` until the list is exactly `final_k` long.
-
-    Expansion displaces the tail of the reranked list, but only as far as it
-    actually has neighbours to offer. Without backfill a symbol with no callers
-    would hand back a short list, and a configuration returning 6 chunks cannot
-    be compared with one returning 10 — the gap reads as a quality difference.
-    Duplicates are skipped: a neighbour may already sit in the reranked tail.
-    """
-    out = list(chunks[:final_k])
-    seen = {scored.chunk.chunk_id for scored in out}
-    for scored in remainder:
-        if len(out) >= final_k:
-            break
-        if scored.chunk.chunk_id in seen:
-            continue
-        seen.add(scored.chunk.chunk_id)
-        out.append(scored)
-    return out
 
 
 # --------------------------------------------------------------------------- #

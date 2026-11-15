@@ -20,6 +20,7 @@ the hundreds and never cross an HTTP boundary. API-facing models live in
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Protocol, runtime_checkable
@@ -149,3 +150,22 @@ class Retriever(Protocol):
     """
 
     async def search(self, query: str) -> RetrievalResult: ...
+
+
+@runtime_checkable
+class ChunkReranker(Protocol):
+    """Reorders fused candidates by relevance. Implemented by `Reranker`."""
+
+    async def rerank(
+        self, query: str, chunks: Sequence[ScoredChunk], *, top_k: int | None = None
+    ) -> list[ScoredChunk]: ...
+
+
+@runtime_checkable
+class ChunkExpander(Protocol):
+    """Appends call-graph neighbours after its seeds. Implemented by `GraphExpander`."""
+
+    @property
+    def max_extra(self) -> int: ...
+
+    async def expand(self, chunks: Sequence[ScoredChunk]) -> list[ScoredChunk]: ...

@@ -33,3 +33,9 @@ class LLMError(CodeMindError):
 
 class GroundingError(CodeMindError):
     """An answer cited evidence that does not exist in the retrieved context."""
+
+
+class ToolError(CodeMindError):
+    """An agent tool was called with input it cannot serve — a path outside the
+    repository, a line range past the end of a file, a symbol graph too old to
+    carry line ranges. Not raised for "nothing found": an empty result is an answer."""

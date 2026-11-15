@@ -1,5 +1,7 @@
 """Paired bootstrap for retrieval configuration comparisons."""
+
 from __future__ import annotations
+
 import random
 from collections.abc import Sequence
 

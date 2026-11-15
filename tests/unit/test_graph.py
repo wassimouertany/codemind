@@ -36,7 +36,8 @@ def test_every_node_is_named() -> None:
         "__start__",
         "router",
         "retrieve",
-        "code_analyst",
+        "bug_analyst",
+        "architecture_analyst",
         "dependency_agent",
         "locator",
         "__end__",
@@ -46,8 +47,8 @@ def test_every_node_is_named() -> None:
 @pytest.mark.parametrize(
     ("route", "specialist"),
     [
-        ("bug", "code_analyst"),
-        ("architecture", "code_analyst"),
+        ("bug", "bug_analyst"),
+        ("architecture", "architecture_analyst"),
         ("dependency", "dependency_agent"),
         ("locator", "locator"),
     ],
@@ -75,7 +76,7 @@ async def test_an_unreachable_llm_degrades_the_run_instead_of_raising() -> None:
     final = await run_graph(build_graph(llm, StubRetriever(CHUNKS)), "q")
 
     assert final["route"] == [Route.BUG]
-    assert [m["node"] for m in final["messages"]] == ["router", "retrieve", "code_analyst"]
+    assert [m["node"] for m in final["messages"]] == ["router", "retrieve", "bug_analyst"]
     assert len(final["errors"]) == 2  # router fallback + analyst failure
     assert final["evidence"] == []
 
@@ -109,3 +110,39 @@ async def test_run_graph_passes_the_configured_recursion_limit() -> None:
 
 def test_default_recursion_limit_is_25() -> None:
     assert Settings().graph_recursion_limit == 25
+
+
+class _CountingReranker:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def rerank(self, query, chunks, *, top_k=None):  # type: ignore[no-untyped-def]
+        self.calls += 1
+        return list(reversed(chunks))[:top_k]
+
+
+async def test_rerank_passed_but_disabled_never_runs() -> None:
+    """Default behaviour is unchanged: RERANK_ENABLED ships false."""
+    reranker = _CountingReranker()
+    graph = build_graph(
+        scripted("bug"),
+        StubRetriever(CHUNKS),
+        reranker=reranker,
+        settings=Settings(rerank_enabled=False),
+    )
+    final = await run_graph(graph, "q")
+    assert reranker.calls == 0
+    assert final["retrieved"] == CHUNKS
+
+
+async def test_rerank_passed_and_enabled_reorders_what_the_specialist_sees() -> None:
+    reranker = _CountingReranker()
+    graph = build_graph(
+        scripted("bug"),
+        StubRetriever(CHUNKS),
+        reranker=reranker,
+        settings=Settings(rerank_enabled=True),
+    )
+    final = await run_graph(graph, "q")
+    assert reranker.calls == 1
+    assert final["retrieved"] == list(reversed(CHUNKS))
