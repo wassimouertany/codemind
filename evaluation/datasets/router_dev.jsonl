@@ -1,0 +1,16 @@
+{"source": "bug-02", "question": "Why does searching for an owner that does not exist return a binding error in search form?", "route": "bug"}
+{"source": "bug-03", "question": "Why would adding a visit to a pet fail during form validation when description is blank?", "route": "bug"}
+{"source": "bug-05", "question": "Why would pet birth date validation fail when given a future date?", "route": "bug"}
+{"source": "bug-07", "question": "Why would the vet listing XML endpoint fail to serialize specialty objects?", "route": "bug"}
+{"source": "arch-01", "question": "How is the Spring Boot application bootstrapping configured with main entry point?", "route": "architecture"}
+{"source": "arch-03", "question": "How does the artificial crash endpoint trigger exceptions for testing global error handling?", "route": "architecture"}
+{"source": "arch-05", "question": "How are base mapped entity structures defined for primary keys and new instance checks?", "route": "architecture"}
+{"source": "arch-07", "question": "How is the home welcome page controller endpoint structured?", "route": "architecture"}
+{"source": "dep-02", "question": "Which classes interact directly when searching for owners by last name?", "route": "dependency"}
+{"source": "dep-04", "question": "What components are involved when creating and storing a new Visit for a Pet?", "route": "dependency"}
+{"source": "dep-06", "question": "Which components interact when binding and validating pet form submissions?", "route": "dependency"}
+{"source": "dep-07", "question": "What classes are involved in populating pet type dropdown options across owner forms?", "route": "dependency"}
+{"source": "dep-08", "question": "What Java classes form the DTO and controller layer for vet XML/JSON output?", "route": "dependency"}
+{"source": "dev", "question": "What do the tests for VisitController assert about the visit form?", "route": "test"}
+{"source": "dev", "question": "Are there integration tests that run against a real MySQL database?", "route": "test"}
+{"source": "dev", "question": "Which test classes mock the OwnerRepository, and why?", "route": "test"}

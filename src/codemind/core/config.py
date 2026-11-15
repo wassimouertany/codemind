@@ -81,6 +81,12 @@ class Settings(BaseSettings):
     llm_max_tokens: int = 1024
     llm_temperature: float = 0.1
     llm_num_ctx: int = 8192
+    llm_timeout: float = Field(180.0, gt=0)
+    """Seconds per request. Generous on purpose: a cold load of the 3B model on
+    the 4 GB card measured 69s for a 12-token answer, nearly all of it load and
+    prompt eval. A tight timeout would turn every cold start into a retry."""
+    llm_max_retries: int = Field(3, ge=1, le=10)
+    """Attempts on connection failures and read timeouts only. Never on 4xx."""
 
     # retrieval
     prefetch_dense: int = Field(20, ge=1, le=200)
@@ -109,6 +115,11 @@ class Settings(BaseSettings):
     expand. At a top-10 budget, 5 means "5 reranked hits plus up to 5 of their
     graph neighbours"."""
     rerank_top_k: int = Field(5, ge=1, le=50)
+
+    # agents
+    graph_recursion_limit: int = Field(25, ge=1, le=100)
+    """Supersteps per graph run. A hit almost always means a routing-prompt
+    bug that loops, not a limit that is too low — fix the prompt first."""
 
     # observability
     langfuse_public_key: str = ""

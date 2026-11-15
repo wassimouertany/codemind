@@ -88,6 +88,12 @@ source_modules = ["codemind.agents", "codemind.api", "codemind.retrieval"]
 forbidden_modules = ["codemind.llm.judge"]
 
 [[tool.importlinter.contracts]]
+name = "nodes depend on the LLMClient protocol, never a concrete client"
+type = "forbidden"
+source_modules = ["codemind.agents", "codemind.retrieval", "codemind.ingestion", "codemind.core"]
+forbidden_modules = ["codemind.llm.ollama_client", "codemind.llm.vllm_client"]
+
+[[tool.importlinter.contracts]]
 name = "layered architecture"
 type = "layers"
 layers = ["codemind.api", "codemind.agents", "codemind.retrieval", "codemind.ingestion", "codemind.core"]

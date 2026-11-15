@@ -1,1 +1,40 @@
-{# TODO: router prompt #}
+{#
+  Router prompt. Output is constrained to RouteDecision's JSON schema by the
+  backend, so this prompt only has to make the categories separable.
+
+  Each category is defined by the shape of the question, not its topic: the
+  3B model read topical definitions ("errors, exceptions, validation") as a
+  reason to call nearly everything a bug — 31% on the dev set. Shape cues and
+  two examples per route took it to 87.5%.
+
+  Tuned on evaluation/datasets/router_dev.jsonl, disjoint from
+  tests/fixtures/router_questions.jsonl, and
+  the examples are not about petclinic, so the held-out score is not fitted
+  to the questions it is measured on. Re-tune on the dev set, not on those.
+#}
+Classify a question about a software repository into exactly one category.
+
+- bug: asks WHY something fails, errors, throws, or behaves wrongly. Usually starts with "Why does/would ... fail".
+- architecture: asks HOW something is designed, configured, defined or structured. Usually starts with "How is/are/does".
+- dependency: asks WHICH classes or components use, call, inherit from, or interact with something. Usually starts with "Which" or "What classes/components".
+- test: asks about the TESTS themselves: what tests cover, assert, or mock, or whether test coverage exists.
+
+Examples:
+Q: Why does POST /orders sometimes return 500?
+{"route": "bug"}
+Q: Why would the login form reject a valid password?
+{"route": "bug"}
+Q: How is request authentication wired into the web layer?
+{"route": "architecture"}
+Q: How are database migrations configured at startup?
+{"route": "architecture"}
+Q: Which services call the PaymentGateway client?
+{"route": "dependency"}
+Q: What components are involved when an invoice is emailed?
+{"route": "dependency"}
+Q: Which tests exercise the refund flow, and what do they mock?
+{"route": "test"}
+Q: Is there test coverage for the CSV export?
+{"route": "test"}
+
+Q: {{ question }}

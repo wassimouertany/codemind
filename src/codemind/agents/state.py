@@ -1,1 +1,94 @@
-"""TODO."""
+"""Graph state: what every node reads, and the reducers that merge what they write.
+
+Every key a node may write has an appending reducer. LangGraph's default for a
+key without one is last-write-wins, and when two nodes in the same superstep
+both write it, the graph raises rather than pick one. Neither is acceptable
+here: the grounding retry re-enters retrieval, and the evidence from the first
+pass must survive the second. So lists concatenate and `attempts` sums.
+
+`question` is the one exception. It is the input, written once by the caller
+and by no node, so it keeps the default channel; a node that tried to write it
+would be a bug the default channel surfaces.
+
+Nodes return a partial update containing only the keys they own — the
+`*Update` TypedDicts below are those contracts, and mypy checks a node's return
+against its own. Read the current route with `current_route`, never
+`state["route"][0]`: routes append too, so the latest decision is the last.
+"""
+
+from __future__ import annotations
+
+import operator
+from enum import StrEnum
+from typing import Annotated, TypedDict
+
+from codemind.retrieval.schemas import ScoredChunk
+
+
+class Route(StrEnum):
+    """What kind of question this is. The router's only output."""
+
+    BUG = "bug"
+    ARCHITECTURE = "architecture"
+    DEPENDENCY = "dependency"
+    TEST = "test"
+
+
+DEFAULT_ROUTE = Route.BUG
+"""Where an unclassifiable question goes. Bug analysis traces a call path end
+to end, so it is the specialist that degrades most gracefully on a question
+meant for another."""
+
+
+class Evidence(TypedDict):
+    """A line range a claim rests on. The grounding gate resolves these against
+    the retrieved chunk payloads before an answer may cite them."""
+
+    file_path: str
+    start_line: int
+    end_line: int
+    claim: str
+
+
+class AgentMessage(TypedDict):
+    """One node's contribution to the transcript, in execution order."""
+
+    node: str
+    content: str
+
+
+class CodeMindState(TypedDict, total=False):
+    question: str
+    route: Annotated[list[Route], operator.add]
+    retrieved: Annotated[list[ScoredChunk], operator.add]
+    evidence: Annotated[list[Evidence], operator.add]
+    messages: Annotated[list[AgentMessage], operator.add]
+    attempts: Annotated[int, operator.add]
+    errors: Annotated[list[str], operator.add]
+
+
+class RouterUpdate(TypedDict, total=False):
+    """The keys the router owns."""
+
+    route: list[Route]
+    messages: list[AgentMessage]
+    errors: list[str]
+
+
+def initial_state(question: str) -> CodeMindState:
+    """The input a graph run starts from. Every appending key starts empty."""
+    return CodeMindState(
+        question=question,
+        route=[],
+        retrieved=[],
+        evidence=[],
+        messages=[],
+        attempts=0,
+        errors=[],
+    )
+
+
+def current_route(state: CodeMindState) -> Route:
+    """The latest routing decision, or the default when none was made."""
+    routes = state.get("route") or []
+    return routes[-1] if routes else DEFAULT_ROUTE

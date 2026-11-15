@@ -1,0 +1,12 @@
+{"source": "bug-01", "question": "Why would submitting the owner form with a blank last name fail validation?", "route": "bug"}
+{"source": "bug-04", "question": "Why does updating a pet fail when pet type is not selected or invalid?", "route": "bug"}
+{"source": "bug-06", "question": "Why does pet type conversion fail when receiving an unknown string ID?", "route": "bug"}
+{"source": "arch-02", "question": "How is caching configured to optimize performance for vet listing queries?", "route": "architecture"}
+{"source": "arch-04", "question": "How is language switching and locale resolution configured for the web layer?", "route": "architecture"}
+{"source": "arch-06", "question": "How are Spring Data JPA repository interfaces annotated for database querying?", "route": "architecture"}
+{"source": "dep-01", "question": "What Java components depend directly on the Specialty entity?", "route": "dependency"}
+{"source": "dep-03", "question": "Which Java classes use the pet type repository to look up pet types?", "route": "dependency"}
+{"source": "dep-05", "question": "Which domain models inherit from the Person base class?", "route": "dependency"}
+{"source": "handwritten", "question": "Which tests cover searching for owners by last name in OwnerController?", "route": "test"}
+{"source": "handwritten", "question": "How is PetValidator unit tested, and what do its tests mock?", "route": "test"}
+{"source": "handwritten", "question": "Is there any test coverage for the vet listing XML endpoint?", "route": "test"}

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import Protocol, runtime_checkable
 
 from codemind.core.types import CodeChunk, Language, Layer
 
@@ -137,3 +138,14 @@ class RetrievalResult:
 
     def by_language(self, language: Language) -> list[ScoredChunk]:
         return [scored for scored in self.chunks if scored.chunk.language is language]
+
+
+@runtime_checkable
+class Retriever(Protocol):
+    """What the agent graph needs from retrieval. Implemented by `HybridRetriever`.
+
+    The graph depends on this shape rather than the concrete class, so agent
+    tests run without an embedder, a sparse model or a Qdrant server.
+    """
+
+    async def search(self, query: str) -> RetrievalResult: ...

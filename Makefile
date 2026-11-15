@@ -31,6 +31,7 @@ lint: ## ruff + mypy + import contracts
 	uv run ruff format --check src tests
 	uv run mypy
 	uv run lint-imports
+	uv run lint-imports
 
 fmt: ## autoformat
 	uv run ruff check --fix src tests
