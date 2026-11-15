@@ -73,7 +73,7 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-addopts = "-q --strict-markers"
+addopts = "-q --strict-markers -m 'not slow'"
 markers = [
     "slow: loads a real model or hits a real service; deselect with -m 'not slow'",
 ]

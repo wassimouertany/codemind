@@ -55,3 +55,6 @@ status: ## show project progress and what to build next
 
 next: ## show the files for the current day
 	@uv run python scripts/status.py --next
+
+test-all: ## run every test including model-loading ones
+	uv run pytest -m ""

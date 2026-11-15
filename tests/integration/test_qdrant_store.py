@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 from qdrant_client import AsyncQdrantClient, models
 
-from codemind.core.config import Settings, get_settings
+from codemind.core.config import Settings
 from codemind.core.exceptions import RetrievalError
 from codemind.core.types import CodeChunk, Language, Layer
 from codemind.ingestion.ast_chunker import AstChunker
@@ -317,16 +317,9 @@ async def test_fixture_repo_indexes_and_sparse_finds_exact_symbol(store: QdrantS
 # --------------------------------------------------------------------------- #
 
 
-async def test_payload_indexes_exist_on_a_live_server() -> None:
+async def test_payload_indexes_exist_on_a_live_server(live_qdrant_url: str) -> None:
     """Local mode ignores payload indexes, so this is the only real check."""
-    settings = get_settings()
-    client = AsyncQdrantClient(url=settings.qdrant_url, timeout=2)
-    try:
-        await client.get_collections()
-    except Exception:  # noqa: BLE001 — any connection failure means "no server here"
-        await client.close()
-        pytest.skip(f"no Qdrant reachable at {settings.qdrant_url}")
-
+    client = AsyncQdrantClient(url=live_qdrant_url, timeout=2)
     store = QdrantStore(Settings(qdrant_collection="codemind_test_indexes"), client=client)
     try:
         await store.ensure_collection(recreate=True)

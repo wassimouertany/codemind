@@ -17,11 +17,10 @@ import asyncio
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 
-import httpx
 import pytest
 from qdrant_client import AsyncQdrantClient, models
 
-from codemind.core.config import Settings, get_settings
+from codemind.core.config import Settings
 from codemind.core.exceptions import RetrievalError
 from codemind.core.types import Language
 from codemind.ingestion.ast_chunker import AstChunker
@@ -38,28 +37,18 @@ COLLECTION = "codemind_test_hybrid"
 pytestmark = pytest.mark.slow
 
 
-def _qdrant_reachable(url: str) -> bool:
-    try:
-        return httpx.get(url, timeout=2).status_code == 200
-    except httpx.HTTPError:
-        return False
-
-
 def hybrid_settings(**overrides: object) -> Settings:
     return Settings(qdrant_collection=COLLECTION, **overrides)  # type: ignore[arg-type]
 
 
 @pytest.fixture(scope="module", autouse=True)
-def ingested_fixture() -> Iterator[int]:
+def ingested_fixture(live_qdrant_url: str) -> Iterator[int]:
     """Ingest the sample repo once per module, and drop the collection after.
 
     Uses `asyncio.run` with its own client so no async client outlives the
     event loop it was created on; each test opens a fresh one.
     """
-    url = get_settings().qdrant_url
-    if not _qdrant_reachable(url):
-        pytest.skip(f"no Qdrant reachable at {url}")
-
+    url = live_qdrant_url
     chunks = AstChunker().chunk_all(RepositoryLoader(FIXTURE).collect())
     embedder, sparse = get_embedder(), get_sparse_encoder()
 
