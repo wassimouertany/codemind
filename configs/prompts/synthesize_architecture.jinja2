@@ -1,0 +1,21 @@
+{#
+  Architecture synthesis. Output is constrained to ArchitectureAnswer: {"mechanism": str}.
+  Evidence is attached by the node from the claims, never written here.
+#}
+{% from "_context.jinja2" import numbered_claims, cited_code %}
+You write the final answer to an architecture question about a codebase, using the numbered claims and the code below.
+
+Fill the field:
+- mechanism: how the feature works — which components are involved, how they are configured or wired together, and how control flows between them, in order.
+
+Rules:
+- Use only the claims and the code below. Do not introduce a file, class or method that is not in them.
+- Refer to claims by number in brackets, like [2]. Do not invent claim numbers.
+- Never write a line number. The claims carry the locations.
+
+Question: {{ question }}
+
+Claims:
+{{ numbered_claims(claims) }}
+Code the claims rest on:
+{{ cited_code(sources) }}

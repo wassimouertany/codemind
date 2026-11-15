@@ -16,3 +16,27 @@ imports: {{ chunk.imports | join(", ") }}
 
 {% endfor %}
 {% endmacro %}
+
+{#
+  Claims for the synthesizer, numbered [1]..[n]. These numbers are the only
+  thing the answer may cite; locations stay with the claims.
+#}
+{% macro numbered_claims(claims) %}
+{% for claim in claims %}
+[{{ loop.index }}] {{ claim.claim }}
+{% endfor %}
+{% endmacro %}
+
+{#
+  The code the claims rest on, labelled by the claims that cite it and by path
+  only — no line numbers, so the answer has none to copy into prose.
+#}
+{% macro cited_code(sources) %}
+{% for source in sources %}
+Code for {{ source.label }} — {{ source.chunk.relative_path }}
+```{{ source.chunk.language.value }}
+{{ source.chunk.body }}
+```
+
+{% endfor %}
+{% endmacro %}

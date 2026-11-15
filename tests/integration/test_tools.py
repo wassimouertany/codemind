@@ -260,3 +260,19 @@ async def test_search_code_wraps_retrieval_failures() -> None:
     retriever = StubRetriever(error=RetrievalError("qdrant unreachable"))
     with pytest.raises(ToolError, match="qdrant unreachable"):
         await SearchCode(retriever)("q")
+
+
+async def test_graph_nodes_carry_their_layer_through_save_and_load(reloaded: SymbolGraph) -> None:
+    """What a future trace_to_layer() walks to: the first REPOSITORY-layer node."""
+    layers = {
+        hop.display_name: reloaded.graph.nodes[hop.qualified_name]["layer"]
+        for hop in (await TraceCallPath(reloaded)("createOrder", "callGateway")).hops
+    }
+    assert layers == {
+        "OrderController.createOrder": "controller",
+        "OrderService.placeOrder": "service",
+        "PaymentService.processPayment": "service",
+        "PaymentService.callGateway": "service",
+    }
+    repo = (await FindDefinition(reloaded)("findByCustomerId"))[0]
+    assert reloaded.graph.nodes[repo.qualified_name]["layer"] == "repository"

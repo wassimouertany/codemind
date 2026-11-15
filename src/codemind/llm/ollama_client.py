@@ -34,6 +34,7 @@ from tenacity import (
 from codemind.core.config import Settings, get_settings
 from codemind.core.exceptions import LLMError
 from codemind.llm.base import ModelT
+from codemind.llm.tokens import TokenCounter, load_token_counter
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,9 @@ RETRYABLE: tuple[type[httpx.HTTPError], ...] = (httpx.ConnectError, httpx.ReadTi
 
 RETRY_WAIT = wait_exponential(multiplier=0.5, max=8)
 """0.5s, 1s, 2s ... capped at 8s. Long enough for Ollama to finish restarting."""
+
+TEMPLATE_OVERHEAD_TOKENS = 64
+"""Room for the chat template Ollama wraps around the prompt (measured: 29)."""
 
 STRUCTURED_TEMPERATURE = 0.0
 """Classification wants the argmax label, not a sample from around it."""
@@ -54,8 +58,10 @@ class OllamaClient:
         settings: Settings | None = None,
         *,
         client: httpx.AsyncClient | None = None,
+        count_tokens: TokenCounter | None = None,
     ) -> None:
         self._settings = settings or get_settings()
+        self._count_tokens = count_tokens or load_token_counter(self._settings.llm_tokenizer)
         self._client = client or httpx.AsyncClient(
             base_url=self._settings.ollama_base_url,
             timeout=self._settings.llm_timeout,
@@ -108,8 +114,44 @@ class OllamaClient:
             "options": options,
         }
 
+    def _check_budget(self, body: dict[str, Any]) -> int:
+        """Refuse a prompt that cannot fit, before Ollama truncates it silently.
+
+        Ollama never errors on an overlong prompt. Measured: 6,000 words sent
+        with num_ctx=2048 came back as prompt_eval_count=1026 with no error —
+        it kept about half the window and dropped the start, which is where the
+        instructions are. The prompt and the tokens it may generate must both
+        fit. Returns the prompt's token count for the post-hoc check.
+        """
+        options = body["options"]
+        prompt_tokens: int = self._count_tokens(body["prompt"])
+        needed = prompt_tokens + options["num_predict"] + TEMPLATE_OVERHEAD_TOKENS
+        if needed > options["num_ctx"]:
+            raise LLMError(
+                f"prompt of {prompt_tokens} tokens plus {options['num_predict']} to generate "
+                f"does not fit LLM_NUM_CTX={options['num_ctx']}; refusing rather than "
+                "letting Ollama truncate the start of the prompt"
+            )
+        return prompt_tokens
+
+    @staticmethod
+    def _check_not_truncated(prompt_tokens: int, payload: dict[str, Any]) -> None:
+        """Catch a truncation the budget missed: fewer tokens evaluated than were sent.
+
+        `prompt_eval_count` is the whole prompt including any KV-cached prefix
+        (measured: a repeat call reported 2923 evaluated, 2922 of them cached),
+        plus the chat template — so it is never below the counted prompt.
+        """
+        evaluated = payload.get("prompt_eval_count")
+        if isinstance(evaluated, int) and evaluated < prompt_tokens:
+            raise LLMError(
+                f"Ollama evaluated {evaluated} of {prompt_tokens} prompt tokens; the prompt "
+                "was truncated, so the answer was generated without all of it"
+            )
+
     async def _post(self, body: dict[str, Any]) -> str:
         """POST once per attempt; wrap every failure in `LLMError`."""
+        prompt_tokens = self._check_budget(body)
         retrying = AsyncRetrying(
             retry=retry_if_exception_type(RETRYABLE),
             stop=stop_after_attempt(self._settings.llm_max_retries),
@@ -145,12 +187,7 @@ class OllamaClient:
         text = payload.get("response") if isinstance(payload, dict) else None
         if not isinstance(text, str):
             raise LLMError(f"Ollama response has no 'response' string: {str(payload)[:200]}")
-        if payload.get("prompt_eval_count", 0) >= self._settings.llm_num_ctx:
-            logger.warning(
-                "prompt filled the %d-token context; Ollama drops the start of an "
-                "overlong prompt silently — the instructions may be gone",
-                self._settings.llm_num_ctx,
-            )
+        self._check_not_truncated(prompt_tokens, payload)
         if payload.get("done_reason") == "length":
             logger.warning("ollama hit num_predict before finishing; output is truncated")
         return text

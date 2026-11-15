@@ -9,6 +9,7 @@ no context overflow — plus one fact the fixture's bug makes unambiguous.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import httpx
@@ -57,17 +58,26 @@ async def ask(question: str, chunks: list[ScoredChunk], caplog: pytest.LogCaptur
     with caplog.at_level("WARNING", logger="codemind.llm.ollama_client"):
         async with OllamaClient() as llm:
             final = await run_graph(build_graph(llm, StubRetriever(chunks)), question)
-    assert "context" not in caplog.text, caplog.text
-    print(f"\n--- {question}\n{final['messages'][-1]['content']}")
+    assert "truncat" not in caplog.text, caplog.text
+    print(f"\n--- {question}")
+    for answer in final["answer"]:
+        for name, value in (answer["fields"] or {"degraded": answer["degraded"]}).items():
+            print(f"  {name}: {value}")
+    if not final["answer"]:
+        print(final["messages"][-1]["content"])
     for e in final["evidence"]:
-        print(f"  {e['file_path']}:{e['start_line']}-{e['end_line']}  {e['claim']}")
+        print(f"    {e['file_path']}:{e['start_line']}-{e['end_line']}  {e['claim']}")
     retrieved = {
         (s.chunk.relative_path, s.chunk.start_line, s.chunk.end_line) for s in final["retrieved"]
     }
-    assert all(
-        (e["file_path"], e["start_line"], e["end_line"]) in retrieved for e in final["evidence"]
-    )
+    cited = final["evidence"] + [e for a in final["answer"] for e in a["evidence"]]
+    assert all((e["file_path"], e["start_line"], e["end_line"]) in retrieved for e in cited)
     return dict(final)
+
+
+def prose(final: dict) -> str:  # type: ignore[type-arg]
+    fields = final["answer"][-1]["fields"]
+    return " ".join(v if isinstance(v, str) else " ".join(v) for v in fields.values())
 
 
 async def test_reference_bug_question(
@@ -76,11 +86,15 @@ async def test_reference_bug_question(
     final = await ask("Why does POST /orders sometimes return 500?", java_chunks, caplog)
     assert final["route"] == [Route.BUG]
     assert final["errors"] == []
-    assert final["evidence"]
-    analysis = final["messages"][-1]["content"]
-    assert "PaymentTimeoutException" in analysis
-    cited = {e["file_path"].rsplit("/", 1)[-1] for e in final["evidence"]}
+    answer = final["answer"][-1]
+    assert answer["degraded"] is None
+    fields = answer["fields"]
+    assert "PaymentTimeoutException" in fields["root_cause"]
+    assert fields["recommended_fix"] and all(step.strip() for step in fields["recommended_fix"])
+    assert fields["suggested_test"].strip()
+    cited = {e["file_path"].rsplit("/", 1)[-1] for e in answer["evidence"]}
     assert {"OrderService.java", "PaymentService.java"} <= cited  # where it is thrown and missed
+    assert not re.search(r"\bline \d+|:\d+\b", prose(final))  # locations stay in evidence
 
 
 async def test_dependency_question(
@@ -89,7 +103,9 @@ async def test_dependency_question(
     final = await ask("Which classes call PaymentService?", java_chunks, caplog)
     assert final["route"] == [Route.DEPENDENCY]
     assert final["errors"] == []
-    assert final["evidence"]
+    answer = final["answer"][-1]
+    assert answer["degraded"] is None
+    assert "OrderService" in " ".join(answer["fields"]["impacted"])
 
 
 async def test_locator_question(

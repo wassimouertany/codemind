@@ -9,6 +9,7 @@ from langgraph.graph import START, StateGraph
 from codemind.agents.graph import build_graph, run_graph
 from codemind.agents.nodes.router import RouteDecision
 from codemind.agents.nodes.specialist import SpecialistAnswer
+from codemind.agents.nodes.synthesize import ArchitectureAnswer, BugAnswer, DependencyAnswer
 from codemind.agents.state import CodeMindState, Route
 from codemind.core.config import Settings
 from codemind.core.exceptions import LLMError
@@ -21,10 +22,13 @@ def scripted(route: str) -> StubLLM:
     """Routes to `route`; any specialist answers with one citation of chunk [1]."""
 
     def respond(prompt: str, schema: type) -> object:
-        if schema is RouteDecision:
-            return {"route": route}
-        assert schema is SpecialistAnswer
-        return {"claims": [{"chunk": 1, "statement": "c"}]}
+        return {
+            RouteDecision: {"route": route},
+            SpecialistAnswer: {"claims": [{"chunk": 1, "statement": "c"}]},
+            BugAnswer: {"root_cause": "rc", "recommended_fix": ["fix"], "suggested_test": "t"},
+            ArchitectureAnswer: {"mechanism": "m"},
+            DependencyAnswer: {"impacted": ["X"], "reasoning": "r"},
+        }[schema]
 
     return StubLLM(respond)
 
@@ -40,6 +44,7 @@ def test_every_node_is_named() -> None:
         "architecture_analyst",
         "dependency_agent",
         "locator",
+        "synthesize",
         "__end__",
     }
 
@@ -58,11 +63,19 @@ async def test_each_route_reaches_its_specialist_once(route: str, specialist: st
     final = await run_graph(graph, "q")
 
     assert final["route"] == [Route(route)]
-    assert [m["node"] for m in final["messages"]] == ["router", "retrieve", specialist]
+    tail = [] if route == "locator" else ["synthesize"]
+    assert [m["node"] for m in final["messages"]] == ["router", "retrieve", specialist, *tail]
+    assert len(final["answer"]) == (0 if route == "locator" else 1)
     assert final["retrieved"] == CHUNKS
     assert final["evidence"][0]["start_line"] == 10
     assert final["attempts"] == 1
     assert final["errors"] == []
+
+
+async def test_the_answer_carries_the_specialists_evidence() -> None:
+    final = await run_graph(build_graph(scripted("bug"), StubRetriever(CHUNKS)), "q")
+    assert final["answer"][0]["evidence"] == final["evidence"]
+    assert final["answer"][0]["fields"]["recommended_fix"] == ["fix"]  # type: ignore[index]
 
 
 async def test_locator_is_a_short_circuit_with_no_generation() -> None:
@@ -76,9 +89,15 @@ async def test_an_unreachable_llm_degrades_the_run_instead_of_raising() -> None:
     final = await run_graph(build_graph(llm, StubRetriever(CHUNKS)), "q")
 
     assert final["route"] == [Route.BUG]
-    assert [m["node"] for m in final["messages"]] == ["router", "retrieve", "bug_analyst"]
-    assert len(final["errors"]) == 2  # router fallback + analyst failure
+    assert [m["node"] for m in final["messages"]] == [
+        "router",
+        "retrieve",
+        "bug_analyst",
+        "synthesize",
+    ]
+    assert len(final["errors"]) == 3  # router fallback, analyst failure, degraded answer
     assert final["evidence"] == []
+    assert final["answer"][0]["degraded"] == "no resolved claims to synthesize from"
 
 
 async def test_final_k_from_settings_reaches_the_specialist() -> None:

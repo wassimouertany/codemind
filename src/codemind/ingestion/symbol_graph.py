@@ -187,6 +187,7 @@ class SymbolGraph:
                 path=chunk.relative_path,
                 line=chunk.start_line,
                 end_line=chunk.end_line,
+                layer=chunk.layer.value,
                 simple_name=chunk.symbol_name,
                 language=chunk.language.value,
             )

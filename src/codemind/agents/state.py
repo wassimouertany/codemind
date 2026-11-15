@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import operator
 from enum import StrEnum
-from typing import Annotated, Protocol, TypedDict, TypeVar
+from typing import Annotated, Any, Protocol, TypedDict, TypeVar
 
 from codemind.retrieval.schemas import ScoredChunk
 
@@ -63,6 +63,22 @@ class AgentMessage(TypedDict):
     content: str
 
 
+class FinalAnswer(TypedDict):
+    """The synthesized answer: the route's structured fields plus its evidence.
+
+    `fields` is the route's output schema as a dict (`root_cause`,
+    `recommended_fix`, ... for a bug), exactly as the grammar constrained it.
+    `evidence` is carried through from the specialist's resolved claims, never
+    produced by the synthesizer. `degraded` says why the answer is incomplete,
+    or is None when it is not.
+    """
+
+    route: Route
+    fields: dict[str, Any] | None
+    evidence: list[Evidence]
+    degraded: str | None
+
+
 class CodeMindState(TypedDict, total=False):
     question: str
     route: Annotated[list[Route], operator.add]
@@ -71,6 +87,7 @@ class CodeMindState(TypedDict, total=False):
     messages: Annotated[list[AgentMessage], operator.add]
     attempts: Annotated[int, operator.add]
     errors: Annotated[list[str], operator.add]
+    answer: Annotated[list[FinalAnswer], operator.add]
 
 
 class RouterUpdate(TypedDict, total=False):
@@ -99,6 +116,15 @@ class AnalysisUpdate(TypedDict, total=False):
     errors: list[str]
 
 
+class SynthesizeUpdate(TypedDict, total=False):
+    """The keys the synthesizer owns. Answers append, like routes: after the
+    grounding retry the latest answer is the last one."""
+
+    answer: list[FinalAnswer]
+    messages: list[AgentMessage]
+    errors: list[str]
+
+
 UpdateT_co = TypeVar("UpdateT_co", covariant=True)
 
 
@@ -122,6 +148,7 @@ def initial_state(question: str) -> CodeMindState:
         messages=[],
         attempts=0,
         errors=[],
+        answer=[],
     )
 
 

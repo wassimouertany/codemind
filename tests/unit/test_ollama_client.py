@@ -52,11 +52,18 @@ def settings(**overrides: object) -> Settings:
     return Settings(**(base | overrides))  # type: ignore[arg-type]
 
 
+def one_token_per_word(text: str) -> int:
+    """A deterministic stand-in for the Qwen tokenizer; no hub download in unit tests."""
+    return len(text.split())
+
+
 def make_client(handler: Handler, **overrides: object) -> OllamaClient:
     s = settings(**overrides)
     transport = httpx.MockTransport(handler)
     return OllamaClient(
-        s, client=httpx.AsyncClient(base_url=s.ollama_base_url, transport=transport)
+        s,
+        client=httpx.AsyncClient(base_url=s.ollama_base_url, transport=transport),
+        count_tokens=one_token_per_word,
     )
 
 
@@ -233,21 +240,45 @@ async def test_truncated_generation_is_returned_with_a_warning(
     assert "truncated" in caplog.text
 
 
-async def test_a_prompt_that_fills_the_context_window_warns(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    """Ollama truncates an overlong prompt from the front without an error."""
-    with caplog.at_level("WARNING", logger="codemind.llm.ollama_client"):
-        await make_client(Recorder(ok("x", prompt_eval_count=4096))).generate("p")
-    assert "4096-token context" in caplog.text
+async def test_a_prompt_that_cannot_fit_is_refused_before_sending() -> None:
+    """Ollama never errors on an overlong prompt; it drops the instructions instead."""
+    recorder = Recorder(ok("x"))
+    client = make_client(recorder, llm_num_ctx=2048, llm_max_tokens=256)
+    with pytest.raises(
+        LLMError, match="1800 tokens plus 256 to generate does not fit LLM_NUM_CTX=2048"
+    ):
+        await client.generate("w " * 1800)  # 1800 + 256 + 64 template > 2048
+    assert recorder.requests == []
 
 
-async def test_a_prompt_within_the_context_window_does_not_warn(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    with caplog.at_level("WARNING", logger="codemind.llm.ollama_client"):
-        await make_client(Recorder(ok("x", prompt_eval_count=4095))).generate("p")
-    assert not caplog.text
+async def test_the_budget_counts_the_tokens_reserved_for_generation() -> None:
+    recorder = Recorder(ok("x"))
+    client = make_client(recorder, llm_num_ctx=2048, llm_max_tokens=256)
+    await client.generate("w " * 1700)  # 1700 + 256 + 64 = 2020: fits
+    with pytest.raises(LLMError, match="does not fit"):
+        await client.generate("w " * 1700, max_tokens=512)
+    assert len(recorder.requests) == 1
+
+
+async def test_structured_calls_are_budget_checked_too() -> None:
+    recorder = Recorder(ok('{"colour": "red"}'))
+    client = make_client(recorder, llm_num_ctx=1024, llm_max_tokens=256)
+    with pytest.raises(LLMError, match="does not fit"):
+        await client.generate_structured("w " * 800, Pick)
+    assert recorder.requests == []
+
+
+async def test_a_truncation_the_budget_missed_is_an_error() -> None:
+    """Measured: 6,000 words at num_ctx=2048 came back as prompt_eval_count=1026."""
+    reply = ok("x", prompt_eval_count=1026, done_reason="length")
+    with pytest.raises(LLMError, match="evaluated 1026 of 1500 prompt tokens"):
+        await make_client(Recorder(reply), llm_num_ctx=8192).generate("w " * 1500)
+
+
+async def test_a_fully_evaluated_prompt_passes_including_its_cached_prefix() -> None:
+    """prompt_eval_count includes the KV-cached prefix and the template."""
+    reply = ok("fine", prompt_eval_count=1529, prompt_eval_cached_count=1528)
+    assert await make_client(Recorder(reply), llm_num_ctx=8192).generate("w " * 1500) == "fine"
 
 
 async def test_context_manager_closes_the_http_client() -> None:

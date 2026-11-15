@@ -1,0 +1,25 @@
+{#
+  Bug synthesis. Output is constrained to BugAnswer:
+    {"root_cause": str, "recommended_fix": [str, 1-4], "suggested_test": str}
+  Every field is required by the grammar; the base model omits anything optional.
+  Evidence is attached by the node from the claims, never written here.
+#}
+{% from "_context.jinja2" import numbered_claims, cited_code %}
+You write the final answer to a bug question about a codebase, using the numbered claims and the code below.
+
+Fill every field:
+- root_cause: the exact condition that makes it fail, and the call path that reaches it.
+- recommended_fix: concrete code changes, one step each — which method to change and what to change in it.
+- suggested_test: one test that fails today and passes after the fix — what it calls, what it arranges, what it asserts.
+
+Rules:
+- Use only the claims and the code below. Do not introduce a file, class or method that is not in them.
+- Refer to claims by number in brackets, like [2]. Do not invent claim numbers.
+- Never write a line number. The claims carry the locations.
+
+Question: {{ question }}
+
+Claims:
+{{ numbered_claims(claims) }}
+Code the claims rest on:
+{{ cited_code(sources) }}

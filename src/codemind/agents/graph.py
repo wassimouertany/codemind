@@ -4,15 +4,15 @@
 hand-built `StateGraph` gives each node its own name in the Langfuse trace,
 which is what Day 13's per-node latency breakdown is read from.
 
-    START -> router -> retrieve -> bug_analyst           (bug)          -> END
-                                -> architecture_analyst  (architecture) -> END
-                                -> dependency_agent      (dependency)   -> END
-                                -> locator               (locator)      -> END
+    START -> router -> retrieve -> bug_analyst           (bug)          -> synthesize -> END
+                                -> architecture_analyst  (architecture) -> synthesize -> END
+                                -> dependency_agent      (dependency)   -> synthesize -> END
+                                -> locator               (locator)                    -> END
 
 Node names follow the route, so a trace reads by question type. The two
 analysts share `code_analyst.py` and its prompt. Locator is a short circuit:
-it formats the top hits and never calls the model. Synthesize and grounding
-attach after the specialists on Days 11-12.
+it formats the top hits and never calls the model, so it skips synthesis too.
+The grounding gate attaches between synthesize and END on Day 12.
 
 Retrieval runs through `RetrievalPipeline`: the reranker and expander are
 optional and inert unless passed in *and* enabled in Settings, so the default
@@ -40,6 +40,8 @@ from codemind.agents.nodes.retrieve import NODE_NAME as RETRIEVE
 from codemind.agents.nodes.retrieve import make_retrieve
 from codemind.agents.nodes.router import NODE_NAME as ROUTER
 from codemind.agents.nodes.router import make_router
+from codemind.agents.nodes.synthesize import NODE_NAME as SYNTHESIZE
+from codemind.agents.nodes.synthesize import make_synthesize
 from codemind.agents.state import CodeMindState, Route, current_route, initial_state
 from codemind.core.config import Settings, get_settings
 from codemind.llm.base import LLMClient
@@ -77,13 +79,15 @@ def build_graph(
         builder.add_node(name, make_code_analyst(llm, route))
     builder.add_node(DEPENDENCY_AGENT, make_dependency_agent(llm))
     builder.add_node(LOCATOR, make_locator(resolved))
+    builder.add_node(SYNTHESIZE, make_synthesize(llm))
 
     builder.add_edge(START, ROUTER)
     builder.add_edge(ROUTER, RETRIEVE)
     specialists = sorted(set(SPECIALIST_FOR_ROUTE.values()))
     builder.add_conditional_edges(RETRIEVE, choose_specialist, specialists)
     for specialist in specialists:
-        builder.add_edge(specialist, END)
+        builder.add_edge(specialist, END if specialist == LOCATOR else SYNTHESIZE)
+    builder.add_edge(SYNTHESIZE, END)
     return builder.compile()
 
 

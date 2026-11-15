@@ -87,6 +87,11 @@ class Settings(BaseSettings):
     prompt eval. A tight timeout would turn every cold start into a retry."""
     llm_max_retries: int = Field(3, ge=1, le=10)
     """Attempts on connection failures and read timeouts only. Never on 4xx."""
+    llm_tokenizer: str = "Qwen/Qwen2.5-Coder-3B-Instruct"
+    """Hugging Face tokenizer that matches the served model, for exact prompt
+    budgeting. Ollama has no tokenize endpoint; the GGUF and the QLoRA
+    fine-tune share this vocabulary. Measured against Ollama's
+    prompt_eval_count: exact, plus 29 tokens of chat template."""
     llm_keep_alive: str = "30m"
     """How long Ollama keeps the model in VRAM after a request ("30m", "1h", "-1"
     for forever, "0" to unload at once). Ollama's default is 5m, and a reload
